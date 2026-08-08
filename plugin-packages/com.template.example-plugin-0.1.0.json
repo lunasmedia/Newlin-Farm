@@ -1,0 +1,9 @@
+{
+  "manifest": {
+    "id": "com.template.example-plugin",
+    "version": "0.1.0",
+    "entry": "index.js",
+    "description": "Example plugin demonstrating manifest and entry structure"
+  },
+  "publishedAt": "2026-08-08T14:57:56.055Z"
+}

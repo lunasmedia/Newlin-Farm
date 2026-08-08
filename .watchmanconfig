@@ -1,0 +1,7 @@
+{
+  "ignore_dirs": [".git", ".next", "dist", "build", "plugin-packages", ".gradle", ".m2", "__pycache__", ".hg", ".svn"],
+  "gc_age_seconds": 86400,
+  "gc_interval_seconds": 86400,
+  "settle": 200,
+  "idle_reap_age_ms": 7200000
+}

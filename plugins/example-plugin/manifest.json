@@ -1,0 +1,6 @@
+{
+  "id": "com.template.example-plugin",
+  "version": "0.1.0",
+  "entry": "index.js",
+  "description": "Example plugin demonstrating manifest and entry structure"
+}
