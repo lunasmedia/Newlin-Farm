@@ -41,6 +41,9 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.bradatlunasmedia.template-expo-app"
     }
   }
 }
