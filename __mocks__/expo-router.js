@@ -9,6 +9,7 @@ module.exports = {
     pathname: '/',
   }),
   useLocalSearchParams: () => ({}),
+  usePathname: () => '/',
   Link: ({ children, href, style }) => React.createElement(Text, { accessibilityRole: 'link', href, style }, children),
   Stack: {
     Screen: () => null,

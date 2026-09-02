@@ -1,18 +1,35 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
-import HomeTab from '../src/app/(tabs)/index';
-import Profile from '../src/app/profile';
+import { render } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Home from '../src/app/home';
+import SignIn from '../src/app/sign-in';
+import { BasketProvider } from '../src/state/basket-context';
+import { FavouritesProvider } from '../src/state/favourites-context';
+
+const testMetrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+function withProviders(children: React.ReactElement) {
+  return (
+    <SafeAreaProvider initialMetrics={testMetrics}>
+      <BasketProvider>
+        <FavouritesProvider>{children}</FavouritesProvider>
+      </BasketProvider>
+    </SafeAreaProvider>
+  );
+}
 
 describe('Routing screens', () => {
-  it('renders Home tab content', async () => {
-    const { getByText } = await render(React.createElement(HomeTab));
-    expect(getByText('Home (Tabs)')).toBeTruthy();
-    expect(getByText(/Tabs Home/)).toBeTruthy();
+  it('renders the Home screen content', async () => {
+    const { getByText } = await render(withProviders(<Home />));
+    expect(getByText('Shop by category')).toBeTruthy();
+    expect(getByText('Popular right now')).toBeTruthy();
   });
 
-  it('renders Profile and displays id param as unknown by default', async () => {
-    const { getByText } = await render(React.createElement(Profile));
-    expect(getByText('Profile')).toBeTruthy();
-    expect(getByText(/User ID:/)).toBeTruthy();
+  it('renders the Sign in screen content', async () => {
+    const { getByText } = await render(withProviders(<SignIn />));
+    expect(getByText('Good to see you again')).toBeTruthy();
   });
 });

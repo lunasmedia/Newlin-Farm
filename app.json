@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.bradatlunasmedia.templateexpoapp"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
