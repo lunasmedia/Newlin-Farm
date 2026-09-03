@@ -6,7 +6,8 @@ import {
   Image,
   Pressable,
   ScrollView,
-  ActivityIndicator,
+  RefreshControl,
+  Platform,
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -37,14 +38,19 @@ const COLLAPSE_RANGE = 90;
 // Vertical gap between the nav row / search bar / address row, baked into
 // the interpolated positions below (see `computeHeaderLayout`).
 const HEADER_GAP = spacing.sm;
-// How far past the top the user has to pull before releasing triggers a
-// refresh. The native RefreshControl spinner can't be used here — it's a
-// subview of the ScrollView, so it renders *underneath* the always-on-top
-// header overlay and is invisible. Pull progress and the spinner are
-// instead driven by hand from the same scrollY value the header already
-// uses, and the spinner is rendered inside the header overlay itself so it
-// shares its top-most z-order.
-const PULL_REFRESH_THRESHOLD = 70;
+// The header stays completely fixed — it never moves, pull-to-refresh
+// included. On iOS the ScrollView reserves its top space with
+// `contentInset` instead of `contentContainerStyle.paddingTop` (see the
+// ScrollView props below): with plain padding, the native RefreshControl
+// spinner draws itself right above content-space y=0, which sits at the
+// very top of the screen (behind the fixed header) since the ScrollView's
+// own frame fills the whole screen. `contentInset` is the standard UIKit
+// mechanism for a reserved-space-at-top layout like this one, and it makes
+// the spinner grow into the inset region instead — i.e. the gap that opens
+// up between the header's fixed bottom edge and the hero banner as the
+// user pulls, exactly where it's visually expected. Because contentInset
+// shifts where scrollY rests (see `restScrollY` below), Android — which
+// doesn't support contentInset — keeps the original padding approach.
 
 // All three rows are positioned by directly interpolating their `top` off
 // live scroll position — not by animating a sibling's height/margin and
@@ -59,13 +65,22 @@ const PULL_REFRESH_THRESHOLD = 70;
 // reflow.
 function computeHeaderLayout(
   scrollY: Animated.Value,
+  restY: number,
   topOffset: number,
   navH: number,
   searchH: number,
   deliverH: number
 ) {
+  // restY is where scrollY sits at rest (0 normally; -expandedHeaderHeight
+  // on iOS, where contentInset shifts the resting offset — see below). The
+  // collapse still plays out over the same COLLAPSE_RANGE of *scrolling*
+  // regardless of where that scroll starts from.
   const interpolate = (outputRange: [number, number]) =>
-    scrollY.interpolate({ inputRange: [0, COLLAPSE_RANGE], outputRange, extrapolate: 'clamp' });
+    scrollY.interpolate({
+      inputRange: [restY, restY + COLLAPSE_RANGE],
+      outputRange,
+      extrapolate: 'clamp',
+    });
 
   return {
     // The nav row's position stays fixed (see JSX) — instead its own
@@ -98,15 +113,13 @@ export default function Home() {
   const headerTopOffset = insets.top + spacing.xl;
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<any>(null);
   // Measured on first layout so the collapse is based on each row's real
   // rendered height, not a guessed constant.
   const [navRowHeight, setNavRowHeight] = useState<number | null>(null);
   const [searchBarHeight, setSearchBarHeight] = useState<number | null>(null);
   const [deliverRowHeight, setDeliverRowHeight] = useState<number | null>(null);
   const measured = navRowHeight !== null && searchBarHeight !== null && deliverRowHeight !== null;
-  const layout = measured
-    ? computeHeaderLayout(scrollY, headerTopOffset, navRowHeight, searchBarHeight, deliverRowHeight)
-    : null;
   // Reserves the same amount of space at the top of the scroll content as
   // the fully-expanded header occupies, so the hero banner starts exactly
   // where the address row's bottom edge is — matching the pre-collapse
@@ -114,18 +127,33 @@ export default function Home() {
   const expandedHeaderHeight = measured
     ? headerTopOffset + navRowHeight + HEADER_GAP + searchBarHeight + HEADER_GAP + deliverRowHeight
     : headerTopOffset + 220; // generous placeholder for the one frame before measurement
+  // On iOS, contentInset reserves that space instead of padding (see the
+  // ScrollView props), which means scrollY rests at -expandedHeaderHeight
+  // rather than 0 — the collapse math needs to know that to trigger at the
+  // same real scroll distance as before.
+  const restScrollY = Platform.OS === 'ios' ? -expandedHeaderHeight : 0;
+  const layout = measured
+    ? computeHeaderLayout(scrollY, restScrollY, headerTopOffset, navRowHeight, searchBarHeight, deliverRowHeight)
+    : null;
+
+  // contentInset is only respected from the first frame it's set on iOS —
+  // once the real (measured) header height replaces the placeholder used
+  // for that first frame, nudge the resting scroll position to match so
+  // content doesn't jump.
+  React.useEffect(() => {
+    if (Platform.OS === 'ios' && measured) {
+      scrollRef.current?.scrollTo({ y: -expandedHeaderHeight, animated: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measured]);
 
   React.useEffect(() => {
     if (!loading && !authUser) router.replace('/sign-in');
   }, [authUser, loading, router]);
 
-  const [refreshing, setRefreshing] = useState(true);
-  // Read from onScrollEndDrag to decide whether the user pulled far enough
-  // to release into a refresh — Animated.Value has no synchronous getter.
-  const pullDistance = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {
-    if (refreshing) return;
     setRefreshing(true);
     // Nothing to actually re-fetch (all data here is static/local) — this
     // just gives the gesture the feedback a real refresh would.
@@ -136,17 +164,21 @@ export default function Home() {
     <AppShell>
       <View style={{ flex: 1 }}>
         <Animated.ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: expandedHeaderHeight, paddingBottom: spacing.xxl }}
+          contentContainerStyle={{
+            paddingTop: Platform.OS === 'ios' ? 0 : expandedHeaderHeight,
+            paddingBottom: spacing.xxl,
+          }}
+          contentInset={Platform.OS === 'ios' ? { top: expandedHeaderHeight } : undefined}
+          contentOffset={Platform.OS === 'ios' ? { x: 0, y: -expandedHeaderHeight } : undefined}
+          contentInsetAdjustmentBehavior="never"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.forest} />
+          }
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: false,
-            listener: (e: any) => {
-              pullDistance.current = -e.nativeEvent.contentOffset.y;
-            },
           })}
-          onScrollEndDrag={() => {
-            if (pullDistance.current >= PULL_REFRESH_THRESHOLD) handleRefresh();
-          }}
           scrollEventThrottle={16}>
           <Pressable style={styles.hero} onPress={() => router.push('/shop?category=fruit-veg')}>
           <View style={styles.heroText}>
@@ -202,7 +234,10 @@ export default function Home() {
             reposition — that dependency was the root cause of both bugs.
             The ScrollView's content already reserves `expandedHeaderHeight`
             of space up top; this overlay just reveals progressively more of
-            it as it shrinks, rather than the content actually moving. */}
+            it as it shrinks, rather than the content actually moving. Fixed
+            in place at all times, pull-to-refresh included — see the
+            contentInset comment above for how the pull's spinner still
+            shows up below it without the header itself moving. */}
         <View style={styles.headerOverlay} pointerEvents="box-none">
           <Animated.View
             style={[
@@ -285,31 +320,6 @@ export default function Home() {
               </Pressable>
             </Animated.View>
           </Animated.View>
-
-          {/* Pull-to-refresh spinner. Rendered here — a sibling of the clip,
-              not inside it — so it sits above the header content at a fixed
-              spot and is untouched by the collapse animation. Its opacity
-              tracks the live pull distance while dragging (via scrollY,
-              which goes negative on overscroll) so it fades in as the user
-              pulls, then locks to fully visible for the duration of the
-              simulated refresh once released past the threshold. */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.pullRefreshWrap,
-              { top: insets.top + spacing.xs },
-              {
-                opacity: refreshing
-                  ? 1
-                  : scrollY.interpolate({
-                      inputRange: [-PULL_REFRESH_THRESHOLD, 0],
-                      outputRange: [1, 0],
-                      extrapolate: 'clamp',
-                    }),
-              },
-            ]}>
-            <ActivityIndicator color={colors.forest} />
-          </Animated.View>
         </View>
       </View>
     </AppShell>
@@ -323,7 +333,6 @@ const styles = StyleSheet.create({
   // way, rather than this full-width wrapper eating them.
   headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   headerOverlayClip: { overflow: 'hidden', backgroundColor: colors.cream },
-  pullRefreshWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
