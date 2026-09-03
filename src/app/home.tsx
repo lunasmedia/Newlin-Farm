@@ -1,17 +1,26 @@
 import React, { useRef, useState } from 'react';
-import { Animated, View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
+import {
+  Animated,
+  View,
+  Text,
+  Image,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  StyleSheet,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { ProductCard } from '@/components/ui/ProductCard';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { colors, radii, spacing, shadow } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 import { categories } from '@/data/categories';
 import { products } from '@/data/products';
-import { user } from '@/data/user';
 import { useAuth } from '@/state/auth-context';
+import { useBasket } from '@/state/basket-context';
 
 // Short, single-word labels for the top nav row only — the full category
 // names (used everywhere else) are too long to fit four across one row.
@@ -28,6 +37,14 @@ const COLLAPSE_RANGE = 90;
 // Vertical gap between the nav row / search bar / address row, baked into
 // the interpolated positions below (see `computeHeaderLayout`).
 const HEADER_GAP = spacing.sm;
+// How far past the top the user has to pull before releasing triggers a
+// refresh. The native RefreshControl spinner can't be used here — it's a
+// subview of the ScrollView, so it renders *underneath* the always-on-top
+// header overlay and is invisible. Pull progress and the spinner are
+// instead driven by hand from the same scrollY value the header already
+// uses, and the spinner is rendered inside the header overlay itself so it
+// shares its top-most z-order.
+const PULL_REFRESH_THRESHOLD = 70;
 
 // All three rows are positioned by directly interpolating their `top` off
 // live scroll position — not by animating a sibling's height/margin and
@@ -75,6 +92,7 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user: authUser, loading } = useAuth();
+  const { totalCount } = useBasket();
   // Extra breathing room below the safe area (status bar / Dynamic Island),
   // not just the bare minimum needed to clear it.
   const headerTopOffset = insets.top + spacing.xl;
@@ -101,6 +119,19 @@ export default function Home() {
     if (!loading && !authUser) router.replace('/sign-in');
   }, [authUser, loading, router]);
 
+  const [refreshing, setRefreshing] = useState(true);
+  // Read from onScrollEndDrag to decide whether the user pulled far enough
+  // to release into a refresh — Animated.Value has no synchronous getter.
+  const pullDistance = useRef(0);
+
+  const handleRefresh = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    // Nothing to actually re-fetch (all data here is static/local) — this
+    // just gives the gesture the feedback a real refresh would.
+    setTimeout(() => setRefreshing(false), 1200);
+  };
+
   return (
     <AppShell>
       <View style={{ flex: 1 }}>
@@ -109,7 +140,13 @@ export default function Home() {
           contentContainerStyle={{ paddingTop: expandedHeaderHeight, paddingBottom: spacing.xxl }}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: false,
+            listener: (e: any) => {
+              pullDistance.current = -e.nativeEvent.contentOffset.y;
+            },
           })}
+          onScrollEndDrag={() => {
+            if (pullDistance.current >= PULL_REFRESH_THRESHOLD) handleRefresh();
+          }}
           scrollEventThrottle={16}>
           <Pressable style={styles.hero} onPress={() => router.push('/shop?category=fruit-veg')}>
           <View style={styles.heroText}>
@@ -215,8 +252,16 @@ export default function Home() {
                   <Ionicons name="chevron-down" size={14} color={colors.ink} />
                 </View>
               </Pressable>
-              <Pressable onPress={() => router.push('/account')} style={styles.avatar}>
-                <Text style={styles.avatarText}>{user.initials}</Text>
+              <Pressable
+                onPress={() => router.push('/basket')}
+                style={styles.avatar}
+                testID="basket-header-button">
+                <Ionicons name="basket" size={20} color={colors.white} />
+                {totalCount > 0 ? (
+                  <View style={styles.avatarBadge}>
+                    <Text style={styles.avatarBadgeText}>{totalCount}</Text>
+                  </View>
+                ) : null}
               </Pressable>
             </Animated.View>
 
@@ -240,6 +285,31 @@ export default function Home() {
               </Pressable>
             </Animated.View>
           </Animated.View>
+
+          {/* Pull-to-refresh spinner. Rendered here — a sibling of the clip,
+              not inside it — so it sits above the header content at a fixed
+              spot and is untouched by the collapse animation. Its opacity
+              tracks the live pull distance while dragging (via scrollY,
+              which goes negative on overscroll) so it fades in as the user
+              pulls, then locks to fully visible for the duration of the
+              simulated refresh once released past the threshold. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.pullRefreshWrap,
+              { top: insets.top + spacing.xs },
+              {
+                opacity: refreshing
+                  ? 1
+                  : scrollY.interpolate({
+                      inputRange: [-PULL_REFRESH_THRESHOLD, 0],
+                      outputRange: [1, 0],
+                      extrapolate: 'clamp',
+                    }),
+              },
+            ]}>
+            <ActivityIndicator color={colors.forest} />
+          </Animated.View>
         </View>
       </View>
     </AppShell>
@@ -253,6 +323,7 @@ const styles = StyleSheet.create({
   // way, rather than this full-width wrapper eating them.
   headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   headerOverlayClip: { overflow: 'hidden', backgroundColor: colors.cream },
+  pullRefreshWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   navRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -285,23 +356,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  avatarBadge: {
+    // Kept inside the avatar's own 40x40 box (no negative offsets) — the
+    // header's collapse animation hides this row by sliding the search bar
+    // to exactly cover it, and that coverage is only guaranteed within the
+    // avatar's bounds. A badge poking outside them used to peek out past
+    // the search bar's edge once scrolled.
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: colors.coral,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  avatarBadgeText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   searchBarWrap: { paddingHorizontal: spacing.lg, backgroundColor: colors.cream },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
+    // White, not inputBg (#F4EFE1) — that's nearly the same tone as the
+    // cream page background (#FBF6EA), so the bar had almost no contrast
+    // to pop against regardless of the shadow.
+    backgroundColor: colors.white,
     borderRadius: radii.pill,
     paddingVertical: 14,
     paddingHorizontal: spacing.md,
     gap: spacing.xs,
+    ...shadow.card,
   },
   searchPlaceholder: { flex: 1, color: colors.muted, fontSize: 15 },
   scanBtn: {
     width: 32,
     height: 32,
     borderRadius: radii.sm,
-    backgroundColor: colors.white,
+    // Was white to stand out against the old inputBg fill; now that the
+    // bar itself is white, this needs to be the tinted one instead.
+    backgroundColor: colors.inputBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
