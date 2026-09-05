@@ -5,14 +5,31 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_NEWLIN_API_URL": "https://newlin-farm-admin.lunasmedia19.workers.dev"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_NEWLIN_API_URL": "https://newlin-farm-admin.lunasmedia19.workers.dev"
+      }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_NEWLIN_API_URL": "https://newlin-farm-admin.lunasmedia19.workers.dev"
+      }
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6809041497",
+        "ascApiKeyPath": "./AuthKey_3XC8BB54Z4.p8",
+        "ascApiKeyId": "3XC8BB54Z4",
+        "ascApiKeyIssuerId": "d0fcd7d1-94a7-45c2-ae46-792e673fe2a9"
+      }
+    }
   }
 }
