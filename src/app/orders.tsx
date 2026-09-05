@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AppRefreshControl } from '@/components/ui/AppRefreshControl';
 import { IconCircle } from '@/components/ui/IconCircle';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { NewlinImage } from '@/components/media/NewlinImage';
+import { productImageKey, productImagePlaceholder, productImageSource } from '@/lib/product-image';
 import { useOrders, Order } from '@/state/orders-context';
 import { useCatalog } from '@/state/catalog-context';
 import { colors, radii, spacing } from '@/theme/tokens';
@@ -91,8 +93,22 @@ export default function Orders() {
                     <View key={o.id} style={styles.pastRow}>
                       {p1 && p2 ? (
                         <View style={styles.pastThumbWrap}>
-                          <Image source={p1.image} style={[styles.pastThumb, { left: 0 }]} />
-                          <Image source={p2.image} style={[styles.pastThumb, { left: 18 }]} />
+                          <NewlinImage
+                            visible
+                            source={productImageSource(p1, 'card')}
+                            placeholder={productImagePlaceholder(p1)}
+                            imageKey={productImageKey(p1, 'card')}
+                            style={[styles.pastThumb, { left: 0 }]}
+                            contentFit="cover"
+                          />
+                          <NewlinImage
+                            visible
+                            source={productImageSource(p2, 'card')}
+                            placeholder={productImagePlaceholder(p2)}
+                            imageKey={productImageKey(p2, 'card')}
+                            style={[styles.pastThumb, { left: 18 }]}
+                            contentFit="cover"
+                          />
                         </View>
                       ) : null}
                       <View style={{ flex: 1, marginLeft: spacing.lg }}>

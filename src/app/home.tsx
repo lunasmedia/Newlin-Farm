@@ -1,13 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Animated,
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   Platform,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,10 @@ import { AppShell } from '@/components/layout/AppShell';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { ProductCard } from '@/components/ui/ProductCard';
 import { AppRefreshControl } from '@/components/ui/AppRefreshControl';
+import { ImageAwareScrollView } from '@/components/media/ImageAwareScrollView';
+import { ViewportAwareImage } from '@/components/media/ViewportAwareImage';
+import { useCriticalImagePreload } from '@/hooks/useCriticalImagePreload';
+import { versionedImageUrl } from '@/lib/image-cache';
 import { colors, radii, spacing, shadow } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 import { useAuth } from '@/state/auth-context';
@@ -28,13 +32,22 @@ import { normalizeStoreSettings } from '@/utils/store-settings';
 // the fetch settles, offline with no cached promotions, or an admin has
 // deactivated all of them) — keeps the hero from ever rendering empty.
 const FALLBACK_HERO = {
+  id: 'fallback-hero',
   eyebrow: 'WEEKEND HARVEST',
   title: 'Fresh from our fields.',
   subtitle: 'Save 20% on seasonal fruit and veg.',
   ctaLabel: 'Shop the harvest',
   ctaRoute: '/shop?category=fruit-veg',
   imageUrl: undefined as string | undefined,
+  imageBlurhash: undefined as string | null | undefined,
+  imageVersion: undefined as string | null | undefined,
 };
+
+// Hero cards page horizontally, one full-bleed card per swipe — width is
+// the screen minus the same side margins the single-hero layout used to
+// have, so paging feels identical to the old fixed hero at rest.
+const HERO_GAP = spacing.md;
+const HERO_WIDTH = Dimensions.get('window').width - spacing.lg * 2;
 
 // How much scroll distance the collapse/expand plays out over. Tuned to
 // roughly the combined natural height of the nav row + address row.
@@ -115,8 +128,15 @@ export default function Home() {
   const { products, categories, promotions, settings, refresh } = useCatalog();
   const { defaultAddress } = useAddresses();
   // Falls back to the original bundled copy if the catalogue has no active
-  // promotions yet (first frame before the fetch settles, or none active).
-  const hero = promotions[0] ?? FALLBACK_HERO;
+  // home promotions yet (first frame before the fetch settles, or none
+  // active). A promotion with a categoryId is scoped to that category's
+  // Shop hero instead (see shop.tsx) — excluded here so it isn't shown
+  // twice. Newest-created promotion first — see the admin's
+  // getPublicCatalog ordering — so the carousel always opens on whatever an
+  // admin most recently added.
+  const homePromotions = useMemo(() => promotions.filter((promo) => !promo.categoryId), [promotions]);
+  const heroList = homePromotions.length > 0 ? homePromotions : [FALLBACK_HERO];
+  const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const storeSettings = normalizeStoreSettings(settings);
   const deliverValue = defaultAddress ? defaultAddress.line2 || defaultAddress.line1 : 'Add an address';
   // Extra breathing room below the safe area (status bar / Dynamic Island),
@@ -147,6 +167,20 @@ export default function Home() {
     ? computeHeaderLayout(scrollY, restScrollY, headerTopOffset, navRowHeight, searchBarHeight, deliverRowHeight)
     : null;
 
+  // Only the first (frontmost) hero card is above-the-fold — it's
+  // prefetched with high priority and held behind a cream placeholder frame
+  // until ready, so it never pops in or reflows. Cards reached by swiping
+  // load progressively as they mount, same as any other non-critical image.
+  const firstHero = heroList[0];
+  const heroImageSource = useMemo(
+    () =>
+      firstHero.imageUrl
+        ? { uri: versionedImageUrl(firstHero.imageUrl, firstHero.imageVersion) }
+        : require('@/assets/farm/hero-bag.png'),
+    [firstHero.imageUrl, firstHero.imageVersion]
+  );
+  const criticalImagesReady = useCriticalImagePreload([heroImageSource], { timeoutMs: 1200 });
+
   // contentInset is only respected from the first frame it's set on iOS —
   // once the real (measured) header height replaces the placeholder used
   // for that first frame, nudge the resting scroll position to match so
@@ -165,7 +199,7 @@ export default function Home() {
   return (
     <AppShell>
       <View style={{ flex: 1 }}>
-        <Animated.ScrollView
+        <ImageAwareScrollView
           ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -188,21 +222,64 @@ export default function Home() {
               </Text>
             </View>
           ) : null}
-          <Pressable style={styles.hero} onPress={() => router.push(hero.ctaRoute as any)}>
-          <View style={styles.heroText}>
-            <View style={styles.heroTag}>
-              <Text style={styles.heroTagText}>{hero.eyebrow}</Text>
-            </View>
-            <Text style={styles.heroTitle}>{hero.title}</Text>
-            <Text style={styles.heroSubtitle}>{hero.subtitle}</Text>
-            <Text style={styles.heroLink}>{hero.ctaLabel} →</Text>
+          <View style={styles.heroSection}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={HERO_WIDTH + HERO_GAP}
+              snapToAlignment="start"
+              contentContainerStyle={styles.heroRow}
+              onMomentumScrollEnd={(event) => {
+                const page = Math.round(event.nativeEvent.contentOffset.x / (HERO_WIDTH + HERO_GAP));
+                setActiveHeroIndex((current) => (current === page ? current : page));
+              }}>
+              {heroList.map((promo, index) => {
+                const isFirst = index === 0;
+                const imageSource = isFirst
+                  ? heroImageSource
+                  : promo.imageUrl
+                    ? { uri: versionedImageUrl(promo.imageUrl, promo.imageVersion) }
+                    : require('@/assets/farm/hero-bag.png');
+                return (
+                  <Pressable
+                    key={promo.id}
+                    style={[styles.hero, { width: HERO_WIDTH }]}
+                    onPress={() => router.push(promo.ctaRoute as any)}>
+                    <View style={styles.heroText}>
+                      <View style={styles.heroTag}>
+                        <Text style={styles.heroTagText}>{promo.eyebrow}</Text>
+                      </View>
+                      <Text style={styles.heroTitle}>{promo.title}</Text>
+                      <Text style={styles.heroSubtitle}>{promo.subtitle}</Text>
+                      <Text style={styles.heroLink}>{promo.ctaLabel} →</Text>
+                    </View>
+                    <View style={styles.heroImage}>
+                      {!isFirst || criticalImagesReady ? (
+                        <ViewportAwareImage
+                          critical={isFirst}
+                          source={imageSource}
+                          placeholder={promo.imageBlurhash ? { blurhash: promo.imageBlurhash } : null}
+                          imageKey={`home:hero:${promo.id}:${promo.imageVersion ?? 'current'}`}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                          accessibilityLabel={promo.title}
+                        />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {heroList.length > 1 ? (
+              <View style={styles.heroDots}>
+                {heroList.map((promo, index) => (
+                  <View key={promo.id} style={[styles.heroDot, index === activeHeroIndex && styles.heroDotActive]} />
+                ))}
+              </View>
+            ) : null}
           </View>
-          <Image
-            source={hero.imageUrl ? { uri: hero.imageUrl } : require('@/assets/farm/hero-bag.png')}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-        </Pressable>
 
         <View style={styles.section}>
           <SectionHeading eyebrow="BROWSE" title="Shop by category" onSeeAll={() => router.push('/shop')} />
@@ -235,7 +312,7 @@ export default function Home() {
             ))}
           </ScrollView>
         </View>
-        </Animated.ScrollView>
+        </ImageAwareScrollView>
 
         {/* Layered on top of the ScrollView (not a flex sibling above it) so
             its own animation never needs the ScrollView to resize or
@@ -432,15 +509,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
   },
   announcementText: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.forestDark },
+  heroSection: { marginTop: spacing.lg },
+  heroRow: { paddingHorizontal: spacing.lg },
   hero: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
+    marginRight: HERO_GAP,
     backgroundColor: colors.harvest,
     borderRadius: radii.xl,
     flexDirection: 'row',
     overflow: 'hidden',
     minHeight: 260,
   },
+  heroDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: spacing.sm },
+  heroDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
+  heroDotActive: { width: 18, backgroundColor: colors.forest },
   heroText: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
   heroTag: {
     backgroundColor: colors.forest,
@@ -454,7 +535,7 @@ const styles = StyleSheet.create({
   heroTitle: { fontFamily: fonts.serifBold, fontSize: 30, color: colors.forest, lineHeight: 34 },
   heroSubtitle: { fontSize: 13, color: colors.forestDark, marginTop: spacing.xs, maxWidth: 150 },
   heroLink: { fontSize: 14, fontWeight: '800', color: colors.forest, marginTop: spacing.md, textDecorationLine: 'underline' },
-  heroImage: { width: '46%', height: '100%' },
+  heroImage: { width: '46%', height: '100%', backgroundColor: '#F4EFE1' },
   section: { marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   categoryTile: { alignItems: 'center', marginRight: spacing.lg, width: 74 },
   categoryIcon: {

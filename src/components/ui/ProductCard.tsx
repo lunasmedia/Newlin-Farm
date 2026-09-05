@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Product } from '@/data/products';
 import { useFavourites } from '@/state/favourites-context';
 import { useBasket } from '@/state/basket-context';
 import { useBasketFeedback } from '@/state/basket-feedback-context';
+import { ViewportAwareImage } from '@/components/media/ViewportAwareImage';
+import { productImageKey, productImagePlaceholder, productImageSource } from '@/lib/product-image';
 import { colors, radii, spacing, shadow } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -21,7 +23,14 @@ export function ProductCard({ product, width }: { product: Product; width?: numb
       onPress={() => router.push(`/product/${product.id}`)}
       style={[styles.card, width ? { width } : { flex: 1 }]}>
       <View style={[styles.imageWrap, { backgroundColor: product.backdrop }]}>
-        <Image source={product.image} style={styles.image} resizeMode="cover" />
+        <ViewportAwareImage
+          source={productImageSource(product, 'card')}
+          placeholder={productImagePlaceholder(product)}
+          imageKey={productImageKey(product, 'card')}
+          style={styles.image}
+          contentFit="cover"
+          accessibilityLabel={product.name}
+        />
         {product.badge ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{product.badge}</Text>

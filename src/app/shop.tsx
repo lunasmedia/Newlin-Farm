@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { Chip } from '@/components/ui/Chip';
 import { ProductCard } from '@/components/ui/ProductCard';
+import { ViewportAwareImage } from '@/components/media/ViewportAwareImage';
+import { versionedImageUrl } from '@/lib/image-cache';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 import { useCatalog } from '@/state/catalog-context';
@@ -14,12 +16,27 @@ export default function Shop() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string }>();
-  const { products, categories } = useCatalog();
+  const { products, categories, promotions } = useCatalog();
   const [active, setActive] = useState('all');
 
   useEffect(() => {
     if (params.category) setActive(params.category);
   }, [params.category]);
+
+  const activeCategoryId = active === 'all' ? null : categories.find((c) => c.slug === active)?.slug ?? null;
+  // Admin-managed, set on the Shop screen's "Show on" field (see the
+  // PromotionDialog in the admin) — newest first, matching the home
+  // carousel's ordering. No fallback banner: unlike the home hero, there's
+  // nothing sensible to show for a category an admin hasn't set one up for
+  // yet, so the banner just doesn't render.
+  const categoryHero = useMemo(
+    () => (activeCategoryId ? promotions.find((promo) => promo.categoryId === activeCategoryId) ?? null : null),
+    [activeCategoryId, promotions]
+  );
+  const categoryHeroImageSource = useMemo(
+    () => (categoryHero?.imageUrl ? { uri: versionedImageUrl(categoryHero.imageUrl, categoryHero.imageVersion) } : null),
+    [categoryHero]
+  );
 
   const filtered = useMemo(() => {
     if (active === 'all') return products;
@@ -57,16 +74,30 @@ export default function Shop() {
           ))}
         </ScrollView>
 
-        <Pressable style={styles.banner}>
-          <View style={styles.bannerTag}>
-            <Text style={styles.bannerTagText}>JUST PICKED</Text>
-          </View>
-          <Text style={styles.bannerTitle}>Summer's best,{'\n'}all in one basket.</Text>
-          <Text style={styles.bannerLink}>Explore seasonal →</Text>
-          <View style={styles.bannerImage}>
-            <Text style={{ fontSize: 40 }}>🍓</Text>
-          </View>
-        </Pressable>
+        {categoryHero ? (
+          <Pressable style={styles.banner} onPress={() => router.push(categoryHero.ctaRoute as any)}>
+            <View style={[styles.bannerTag, { backgroundColor: categoryHero.accent }]}>
+              <Text style={styles.bannerTagText}>{categoryHero.eyebrow}</Text>
+            </View>
+            <Text style={styles.bannerTitle}>{categoryHero.title}</Text>
+            <Text style={styles.bannerLink}>{categoryHero.ctaLabel} →</Text>
+            <View style={styles.bannerImage}>
+              {categoryHeroImageSource ? (
+                <ViewportAwareImage
+                  critical
+                  source={categoryHeroImageSource}
+                  placeholder={categoryHero.imageBlurhash ? { blurhash: categoryHero.imageBlurhash } : null}
+                  imageKey={`shop:hero:${categoryHero.id}:${categoryHero.imageVersion ?? 'current'}`}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  accessibilityLabel={categoryHero.title}
+                />
+              ) : (
+                <Ionicons name="leaf-outline" size={32} color={colors.forest} />
+              )}
+            </View>
+          </Pressable>
+        ) : null}
 
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>All groceries</Text>

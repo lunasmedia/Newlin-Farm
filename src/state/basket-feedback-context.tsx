@@ -4,7 +4,10 @@ import { useRouter } from 'expo-router';
 import { AddedToBasketModal } from '@/components/basket/AddedToBasketModal';
 import type { Product } from '@/data/products';
 
-type AddedProduct = Pick<Product, 'id' | 'name' | 'image' | 'backdrop'>;
+type AddedProduct = Pick<
+  Product,
+  'id' | 'name' | 'image' | 'backdrop' | 'imageUrl' | 'thumbnailUrl' | 'imageBlurhash' | 'imageVersion'
+>;
 
 type AddedItem = {
   product: AddedProduct;
@@ -44,7 +47,7 @@ export function BasketFeedbackProvider({ children }: { children: React.ReactNode
       <AddedToBasketModal
         visible={Boolean(addedItem)}
         productName={addedItem?.product.name ?? ''}
-        productImage={addedItem?.product.image}
+        product={addedItem?.product}
         productBackdrop={addedItem?.product.backdrop}
         quantity={addedItem?.quantity ?? 1}
         onDismiss={hideAddedToBasket}

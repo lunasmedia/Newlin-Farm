@@ -23,6 +23,9 @@ export interface ApiCategory {
   name: string;
   emoji: string;
   imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageVersion?: string | null;
   backdrop: string;
   description: string;
   sortOrder: number;
@@ -39,6 +42,9 @@ export interface ApiProduct {
   compareAt?: number;
   badge?: string;
   imageUrl?: string;
+  thumbnailUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageVersion?: string | null;
   backdrop: string;
   rating: number;
   reviews: number;
@@ -54,7 +60,11 @@ export interface ApiPromotion {
   ctaLabel: string;
   ctaRoute: string;
   imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageVersion?: string | null;
   accent: string;
+  categoryId?: string | null;
   sortOrder: number;
   active: boolean;
   startsAt?: string | null;

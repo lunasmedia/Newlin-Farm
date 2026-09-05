@@ -1,8 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Image,
-  type ImageSourcePropType,
   Modal,
   Pressable,
   StyleSheet,
@@ -14,13 +12,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { NewlinImage } from '@/components/media/NewlinImage';
+import { productImageKey, productImagePlaceholder, productImageSource, type ProductWithManagedImage } from '@/lib/product-image';
 import { fonts } from '@/theme/fonts';
 import { colors, radii, shadow, spacing } from '@/theme/tokens';
 
 type AddedToBasketModalProps = {
   visible: boolean;
   productName: string;
-  productImage?: ImageSourcePropType;
+  product?: ProductWithManagedImage;
   productBackdrop?: string;
   quantity?: number;
   onDismiss: () => void;
@@ -31,7 +31,7 @@ type AddedToBasketModalProps = {
 export function AddedToBasketModal({
   visible,
   productName,
-  productImage,
+  product,
   productBackdrop = colors.inputBg,
   quantity = 1,
   onDismiss,
@@ -118,8 +118,16 @@ export function AddedToBasketModal({
 
           <View style={styles.productRow}>
             <View style={[styles.imageFrame, { backgroundColor: productBackdrop }]}>
-              {productImage ? (
-                <Image source={productImage} style={styles.productImage} resizeMode="cover" />
+              {product ? (
+                <NewlinImage
+                  visible
+                  source={productImageSource(product, 'card')}
+                  placeholder={productImagePlaceholder(product)}
+                  imageKey={productImageKey(product, 'card')}
+                  style={styles.productImage}
+                  contentFit="cover"
+                  accessibilityLabel={productName}
+                />
               ) : (
                 <Ionicons name="leaf-outline" size={26} color={colors.forest} />
               )}

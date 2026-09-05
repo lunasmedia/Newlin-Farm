@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { QuantityStepper } from '@/components/ui/QuantityStepper';
 import { Button } from '@/components/ui/Button';
+import { NewlinImage } from '@/components/media/NewlinImage';
+import { productImageKey, productImagePlaceholder, productImageSource } from '@/lib/product-image';
 import { useBasket } from '@/state/basket-context';
 import { useCatalog } from '@/state/catalog-context';
 import { normalizeStoreSettings } from '@/utils/store-settings';
@@ -90,7 +92,15 @@ export default function Basket() {
         <View style={styles.list}>
           {products.map((item, i) => (
             <View key={item.id} style={[styles.row, i > 0 && styles.rowBorder]}>
-              <Image source={item.image} style={styles.thumb} />
+              <NewlinImage
+                visible
+                source={productImageSource(item, 'card')}
+                placeholder={productImagePlaceholder(item)}
+                imageKey={productImageKey(item, 'card')}
+                style={styles.thumb}
+                contentFit="cover"
+                accessibilityLabel={item.name}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.category}>{item.category.toUpperCase()}</Text>
                 <Text style={styles.name}>{item.name}</Text>

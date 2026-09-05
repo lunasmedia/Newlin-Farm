@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,8 @@ import { IconCircle } from '@/components/ui/IconCircle';
 import { QuantityStepper } from '@/components/ui/QuantityStepper';
 import { Button } from '@/components/ui/Button';
 import { Divider } from '@/components/ui/Divider';
+import { NewlinImage } from '@/components/media/NewlinImage';
+import { productImageKey, productImagePlaceholder, productImageSource } from '@/lib/product-image';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -51,7 +53,16 @@ export default function ProductDetail() {
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }}>
         <View style={[styles.photoWrap, { backgroundColor: product.backdrop }]}>
-          <Image source={product.image} style={styles.photo} resizeMode="cover" />
+          <NewlinImage
+            visible
+            priority="high"
+            source={productImageSource(product, 'detail')}
+            placeholder={productImagePlaceholder(product)}
+            imageKey={productImageKey(product, 'detail')}
+            style={styles.photo}
+            contentFit="cover"
+            accessibilityLabel={product.name}
+          />
           <View style={[styles.photoTopRow, { top: insets.top + spacing.sm }]}>
             <IconCircle name="chevron-back" onPress={() => router.back()} />
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>

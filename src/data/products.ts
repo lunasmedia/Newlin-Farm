@@ -10,6 +10,13 @@ export type Product = {
   compareAt?: number;
   badge?: string;
   image: ImageSourcePropType;
+  // Admin-managed remote image + its derived thumbnail/placeholder/version
+  // (see src/lib/product-image.ts) — absent for the bundled local catalogue
+  // and for any admin product whose photo hasn't been processed yet.
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageVersion?: string | null;
   backdrop: string;
   rating?: number;
   reviews?: number;
