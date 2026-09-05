@@ -2,6 +2,7 @@
   "expo": {
     "name": "Newlin Farm",
     "slug": "newlin-farm",
+    "owner": "lunasmedia",
     "scheme": "newlinfarm",
     "platforms": [
       "ios",
@@ -47,6 +48,12 @@
     },
     "ios": {
       "bundleIdentifier": "com.lunasmedia.newlinfarm"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8e001a43-4fd5-4f7f-afdf-cc6e2da781bc"
+      }
     }
   }
 }
