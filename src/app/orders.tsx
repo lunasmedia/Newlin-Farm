@@ -1,125 +1,183 @@
 import React, { useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
-import { currentOrder, pastOrders } from '@/data/orders';
-import { products } from '@/data/products';
+import { AppRefreshControl } from '@/components/ui/AppRefreshControl';
+import { IconCircle } from '@/components/ui/IconCircle';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { useOrders, Order } from '@/state/orders-context';
+import { useCatalog } from '@/state/catalog-context';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
+// The order record only stores an item count and total, not which specific
+// products were bought — there's no line-item table yet — so past-order
+// rows use two catalogue images as decoration, not a claim about contents.
+const PROGRESS_STEPS = ['Confirmed', 'Packing', 'Out for delivery', 'Delivered'];
+
+function formatOrderDate(iso: string) {
+  const normalised = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z';
+  return new Date(normalised).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+}
+
 export default function Orders() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<'progress' | 'past'>('progress');
+  const { currentOrder, pastOrders, loading, refresh } = useOrders();
+  const { products } = useCatalog();
 
   return (
     <AppShell>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        <View style={[styles.topRow, { paddingTop: insets.top + spacing.sm }]}>
-          <View>
-            <Text style={styles.eyebrow}>YOUR SHOPPING</Text>
-            <Text style={styles.title}>Orders</Text>
-          </View>
-          <Pressable style={styles.searchCircle} onPress={() => router.push('/search')}>
-            <Ionicons name="search" size={18} color={colors.ink} />
-          </Pressable>
-        </View>
+      <View style={{ flex: 1 }}>
+        {/* Fixed in place — pull-to-refresh only affects the card/list area
+            below, which has its own ScrollView. Reached by a push from
+            Account's menu (see account.tsx) — there's no tab-bar entry for
+            this screen (the tab bar treats Orders as part of the Account
+            tab — see TabBar.tsx), so ScreenHeader's back button is the only
+            in-app way back besides that tab. */}
+        <ScreenHeader
+          eyebrow="Track your delivery"
+          title="Orders"
+          backTestID="orders-back-button"
+          right={<IconCircle name="search" iconSize={18} onPress={() => router.push('/search')} testID="orders-search-button" />}
+        />
 
-        <View style={styles.segment}>
-          <Pressable
-            style={[styles.segmentBtn, tab === 'progress' && styles.segmentBtnActive]}
-            onPress={() => setTab('progress')}>
-            <Text style={[styles.segmentText, tab === 'progress' && styles.segmentTextActive]}>
-              In progress
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.segmentBtn, tab === 'past' && styles.segmentBtnActive]}
-            onPress={() => setTab('past')}>
-            <Text style={[styles.segmentText, tab === 'past' && styles.segmentTextActive]}>
-              Past orders
-            </Text>
-          </Pressable>
-        </View>
+        <SegmentedControl
+          style={styles.segment}
+          value={tab}
+          onChange={setTab}
+          options={[
+            { label: 'In progress', value: 'progress', testID: 'orders-tab-progress' },
+            { label: 'Past orders', value: 'past', testID: 'orders-tab-past' },
+          ]}
+        />
 
-        {tab === 'progress' ? (
-          <View style={styles.progressCard}>
-            <View style={styles.progressTop}>
-              <Text style={styles.progressStatus}>OUT FOR DELIVERY</Text>
-              <Text style={styles.progressId}>{currentOrder.id}</Text>
-            </View>
-            <Text style={{ fontSize: 48, textAlign: 'center', marginTop: spacing.md }}>🚲</Text>
-            <Text style={styles.progressEta}>Arriving by {currentOrder.eta}</Text>
-            <Text style={styles.progressDriver}>
-              Your driver, {currentOrder.driver}, has left the farm with your order.
-            </Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={tab === 'progress' ? styles.progressScrollContent : { paddingBottom: spacing.xxl }}
+          refreshControl={<AppRefreshControl onRefresh={refresh} />}>
+          {tab === 'progress' ? (
+            loading ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptySubtitle}>Loading…</Text>
+              </View>
+            ) : currentOrder ? (
+              <ProgressCard order={currentOrder} onTrack={() => router.push('/tracking')} />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={{ fontSize: 32 }}>📦</Text>
+                <Text style={styles.emptyTitle}>No orders in progress</Text>
+                <Text style={styles.emptySubtitle}>Once you place an order, track it here.</Text>
+              </View>
+            )
+          ) : (
+            <>
+              <View style={styles.prevHeader}>
+                <Text style={styles.prevTitle}>Previous orders</Text>
+              </View>
 
-            <View style={styles.timelineRow}>
-              {currentOrder.timeline.map((step, i) => (
-                <React.Fragment key={step.label}>
-                  <View style={styles.timelineStep}>
-                    <View style={[styles.timelineDot, (step.done || step.active) && styles.timelineDotOn]}>
-                      <Text style={styles.timelineDotText}>{step.done ? '✓' : i + 1}</Text>
+              {loading ? null : pastOrders.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={{ fontSize: 32 }}>🧺</Text>
+                  <Text style={styles.emptyTitle}>No past orders yet</Text>
+                  <Text style={styles.emptySubtitle}>Your order history will show up here.</Text>
+                </View>
+              ) : (
+                pastOrders.map((o, idx) => {
+                  const p1 = products[idx % products.length];
+                  const p2 = products[(idx + 1) % products.length];
+                  return (
+                    <View key={o.id} style={styles.pastRow}>
+                      {p1 && p2 ? (
+                        <View style={styles.pastThumbWrap}>
+                          <Image source={p1.image} style={[styles.pastThumb, { left: 0 }]} />
+                          <Image source={p2.image} style={[styles.pastThumb, { left: 18 }]} />
+                        </View>
+                      ) : null}
+                      <View style={{ flex: 1, marginLeft: spacing.lg }}>
+                        <Text style={styles.pastDate}>{formatOrderDate(o.createdAt)}</Text>
+                        <Text style={styles.pastMeta}>
+                          {o.itemCount} items · £{(o.totalPence / 100).toFixed(2)}
+                        </Text>
+                        <Text style={styles.pastStatus}>{o.status}</Text>
+                      </View>
                     </View>
-                    <Text style={styles.timelineLabel}>{step.label}</Text>
-                  </View>
-                  {i < currentOrder.timeline.length - 1 ? <View style={styles.timelineConnector} /> : null}
-                </React.Fragment>
-              ))}
-            </View>
-
-            <Pressable style={styles.trackBtn} onPress={() => router.push('/tracking')}>
-              <Text style={styles.trackBtnText}>Track live →</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={styles.prevHeader}>
-          <Text style={styles.prevTitle}>Previous orders</Text>
-          <View style={styles.viewAllBtn}>
-            <Text style={styles.viewAllText}>View all</Text>
-          </View>
-        </View>
-
-        {pastOrders.map((o, idx) => {
-          const p1 = products[idx % products.length];
-          const p2 = products[(idx + 1) % products.length];
-          return (
-            <View key={o.id} style={styles.pastRow}>
-              <View style={styles.pastThumbWrap}>
-                <Image source={p1.image} style={[styles.pastThumb, { left: 0 }]} />
-                <Image source={p2.image} style={[styles.pastThumb, { left: 18 }]} />
-              </View>
-              <View style={{ flex: 1, marginLeft: spacing.lg }}>
-                <Text style={styles.pastDate}>{o.date}</Text>
-                <Text style={styles.pastMeta}>
-                  {o.items} items · £{o.total.toFixed(2)}
-                </Text>
-                <Text style={styles.pastStatus}>{o.status}</Text>
-              </View>
-              <Pressable style={styles.reorderBtn}>
-                <Text style={styles.reorderText}>Reorder</Text>
-              </Pressable>
-            </View>
-          );
-        })}
-      </ScrollView>
+                  );
+                })
+              )}
+            </>
+          )}
+        </ScrollView>
+      </View>
     </AppShell>
   );
 }
 
+function ProgressCard({ order, onTrack }: { order: Order; onTrack: () => void }) {
+  const stepIndex = PROGRESS_STEPS.indexOf(order.status);
+  const cancelled = order.status === 'Cancelled';
+  // Nothing to actually track on a map until the order has left the farm —
+  // earlier statuses (Confirmed/Packing) have no driver en route yet.
+  const trackable = order.status === 'Out for delivery';
+
+  return (
+    <View style={styles.progressCard}>
+      <View style={styles.progressTop}>
+        <Text style={styles.progressStatus}>{order.status.toUpperCase()}</Text>
+        <Text style={styles.progressId}>{order.id}</Text>
+      </View>
+      <Text style={{ fontSize: 48, textAlign: 'center', marginTop: spacing.md }}>
+        {cancelled ? '✕' : '🚲'}
+      </Text>
+      <Text style={styles.progressEta}>
+        {cancelled ? 'Order cancelled' : order.eta ? `Arriving by ${order.eta}` : 'We’ll confirm a time soon'}
+      </Text>
+      {order.driver ? (
+        <Text style={styles.progressDriver}>Your driver, {order.driver}, has your order.</Text>
+      ) : null}
+
+      {!cancelled ? (
+        <View style={styles.timelineRow}>
+          {PROGRESS_STEPS.map((label, i) => (
+            <React.Fragment key={label}>
+              <View style={styles.timelineStep}>
+                <View style={[styles.timelineDot, i <= stepIndex && styles.timelineDotOn]}>
+                  <Text style={styles.timelineDotText}>{i < stepIndex ? '✓' : i + 1}</Text>
+                </View>
+                <Text style={styles.timelineLabel}>{label}</Text>
+              </View>
+              {i < PROGRESS_STEPS.length - 1 ? <View style={styles.timelineConnector} /> : null}
+            </React.Fragment>
+          ))}
+        </View>
+      ) : null}
+
+      {!cancelled ? (
+        <Pressable
+          style={[styles.trackBtn, !trackable && styles.trackBtnDisabled]}
+          onPress={onTrack}
+          disabled={!trackable}
+          testID="track-live-button">
+          <Text style={[styles.trackBtnText, !trackable && styles.trackBtnTextDisabled]}>
+            {trackable ? 'Track live →' : 'Track live once it’s out for delivery'}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  eyebrow: { fontSize: 12, fontWeight: '800', color: colors.coral, letterSpacing: 0.5 },
-  title: { fontFamily: fonts.serifBold, fontSize: 32, color: colors.ink, marginTop: 2 },
-  searchCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  segment: { flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: radii.pill, marginHorizontal: spacing.lg, padding: 4, marginBottom: spacing.lg },
-  segmentBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.pill },
-  segmentBtnActive: { backgroundColor: colors.white },
-  segmentText: { fontSize: 14, fontWeight: '700', color: colors.muted },
-  segmentTextActive: { color: colors.ink },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg },
+  emptyTitle: { fontFamily: fonts.serifBold, fontSize: 18, color: colors.ink, marginTop: spacing.sm },
+  emptySubtitle: { fontSize: 13, color: colors.muted, marginTop: 2, textAlign: 'center' },
+  segment: { marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.lg },
+  // flexGrow so the pull-to-refresh gesture (and the empty state) has room
+  // to work even when the card/empty-state content is shorter than the
+  // screen — a ScrollView with under-height content still supports pull,
+  // but centring the empty state needs the extra flex space either way.
+  progressScrollContent: { flexGrow: 1, paddingBottom: spacing.xxl },
   progressCard: { backgroundColor: colors.forest, marginHorizontal: spacing.lg, borderRadius: radii.xl, padding: spacing.lg },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between' },
   progressStatus: { color: colors.gold, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
@@ -134,17 +192,15 @@ const styles = StyleSheet.create({
   timelineLabel: { fontSize: 10, color: '#CFE0D6', marginTop: 4, textAlign: 'center' },
   timelineConnector: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: -14 },
   trackBtn: { backgroundColor: colors.gold, borderRadius: radii.pill, alignItems: 'center', paddingVertical: 16, marginTop: spacing.lg },
+  trackBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.15)' },
   trackBtnText: { color: colors.forest, fontWeight: '800', fontSize: 16 },
+  trackBtnTextDisabled: { color: '#CFE0D6', fontSize: 13 },
   prevHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md },
   prevTitle: { fontFamily: fonts.serifBold, fontSize: 26, color: colors.ink },
-  viewAllBtn: { backgroundColor: colors.inputBg, borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: spacing.sm },
-  viewAllText: { fontSize: 13, fontWeight: '700', color: colors.ink },
   pastRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   pastThumbWrap: { width: 84, height: 56 },
   pastThumb: { position: 'absolute', width: 56, height: 56, borderRadius: radii.md, borderWidth: 2, borderColor: colors.cream },
   pastDate: { fontFamily: fonts.serifBold, fontSize: 18, color: colors.ink },
   pastMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
   pastStatus: { fontSize: 12, fontWeight: '800', color: colors.forest, marginTop: 2 },
-  reorderBtn: { backgroundColor: colors.sage, borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: spacing.sm },
-  reorderText: { fontSize: 13, fontWeight: '800', color: colors.forest },
 });

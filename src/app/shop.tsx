@@ -8,13 +8,13 @@ import { Chip } from '@/components/ui/Chip';
 import { ProductCard } from '@/components/ui/ProductCard';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
-import { categories } from '@/data/categories';
-import { products } from '@/data/products';
+import { useCatalog } from '@/state/catalog-context';
 
 export default function Shop() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ category?: string }>();
+  const { products, categories } = useCatalog();
   const [active, setActive] = useState('all');
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function Shop() {
     const cat = categories.find((c) => c.slug === active);
     if (!cat) return products;
     return products.filter((p) => p.category === cat.name);
-  }, [active]);
+  }, [active, products, categories]);
 
   return (
     <AppShell>

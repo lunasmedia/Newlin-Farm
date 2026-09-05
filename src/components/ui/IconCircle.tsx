@@ -11,6 +11,7 @@ export function IconCircle({
   color = colors.ink,
   background = colors.white,
   style,
+  testID,
 }: {
   name: React.ComponentProps<typeof Ionicons>['name'];
   onPress?: () => void;
@@ -19,10 +20,12 @@ export function IconCircle({
   color?: string;
   background?: string;
   style?: ViewStyle;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.circle,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: background },

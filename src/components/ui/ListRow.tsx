@@ -11,6 +11,7 @@ export function ListRow({
   onPress,
   chevron = true,
   right,
+  testID,
 }: {
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   emoji?: string;
@@ -19,10 +20,12 @@ export function ListRow({
   onPress?: () => void;
   chevron?: boolean;
   right?: React.ReactNode;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [styles.row, pressed && onPress && { opacity: 0.6 }]}>
       {icon || emoji ? (
         <View style={styles.iconWrap}>

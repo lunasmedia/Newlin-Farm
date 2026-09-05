@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getProduct } from '@/data/products';
+import { useCatalog } from '@/state/catalog-context';
 import { useFavourites } from '@/state/favourites-context';
 import { useBasket } from '@/state/basket-context';
+import { useBasketFeedback } from '@/state/basket-feedback-context';
 import { IconCircle } from '@/components/ui/IconCircle';
 import { QuantityStepper } from '@/components/ui/QuantityStepper';
 import { Button } from '@/components/ui/Button';
@@ -19,17 +20,27 @@ export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const product = getProduct(id);
+  const { products, loading } = useCatalog();
+  const product = products.find((p) => p.id === id);
   const { isFavourite, toggle } = useFavourites();
   const { add } = useBasket();
+  const { showAddedToBasket } = useBasketFeedback();
   const [qty, setQty] = useState(1);
   const [openLove, setOpenLove] = useState(true);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
 
   if (!product) {
+    // A product that only exists remotely (added after this build shipped,
+    // so it's not in the bundled fallback) won't resolve until the first
+    // catalogue fetch settles — show a loader rather than a false "not
+    // found" for that brief window.
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
-        <Text>Product not found.</Text>
+        {loading ? (
+          <ActivityIndicator color={colors.forest} />
+        ) : (
+          <Text>Product not found.</Text>
+        )}
       </View>
     );
   }
@@ -99,7 +110,7 @@ export default function ProductDetail() {
 
           <Divider style={{ marginTop: spacing.lg }} />
           <Pressable style={styles.accordionRow} onPress={() => setOpenLove((v) => !v)}>
-            <Text style={styles.accordionTitle}>Why you'll love it</Text>
+            <Text style={styles.accordionTitle}>Why you&apos;ll love it</Text>
             <Ionicons name={openLove ? 'chevron-up' : 'chevron-down'} size={18} color={colors.ink} />
           </Pressable>
           {openLove ? <Text style={styles.accordionBody}>{product.longDescription}</Text> : null}
@@ -134,7 +145,10 @@ export default function ProductDetail() {
         <QuantityStepper value={qty} onChange={(n) => setQty(Math.max(1, n))} />
         <Button
           label={`Add · £${(product.price * qty).toFixed(2)}`}
-          onPress={() => add(product.id, qty)}
+          onPress={() => {
+            add(product.id, qty);
+            showAddedToBasket(product, qty);
+          }}
           style={{ flex: 1 }}
         />
       </View>

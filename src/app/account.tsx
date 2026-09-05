@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,8 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { Wordmark } from '@/components/ui/LogoMark';
 import { ListRow } from '@/components/ui/ListRow';
-import { user as mockUser } from '@/data/user';
+import { AccountSuspendedModal } from '@/components/account/AccountSuspendedModal';
+import { loyalty } from '@/data/user';
 import { useAuth } from '@/state/auth-context';
+import { useFavourites } from '@/state/favourites-context';
+import { useOrders } from '@/state/orders-context';
+import { getTimeOfDayGreeting } from '@/utils/format-date';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -30,13 +34,29 @@ const MENU = [
 export default function Account() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user: firebaseUser } = useAuth();
+  const { user: firebaseUser, suspended } = useAuth();
+  const { favourites } = useFavourites();
+  const { orders } = useOrders();
+  const [showSuspendedModal, setShowSuspendedModal] = useState(false);
+  // Surfaces a suspension the moment the profile is opened, rather than the
+  // customer only discovering it when an order they try to place fails
+  // (see checkout/review.tsx for that other trigger point). Adjusted during
+  // render rather than in an effect (React's documented alternative:
+  // https://react.dev/learn/you-might-not-need-an-effect) — fires exactly
+  // once per `suspended` transition, so dismissing the modal doesn't get
+  // immediately overridden by an unrelated re-render while still suspended.
+  const [suspendedShownFor, setSuspendedShownFor] = useState(false);
+  if (suspended !== suspendedShownFor) {
+    setSuspendedShownFor(suspended);
+    if (suspended) setShowSuspendedModal(true);
+  }
 
-  // Fall back to the mock profile while the auth state is still resolving,
-  // or if the screen is ever reached without a signed-in user.
+  // Generic fallback (not a fake person) while auth state is still
+  // resolving, or if this screen is ever reached without a signed-in user.
   const displayName =
-    firebaseUser?.displayName?.trim() || firebaseUser?.email?.split('@')[0] || mockUser.name;
+    firebaseUser?.displayName?.trim() || firebaseUser?.email?.split('@')[0] || 'Newlin shopper';
   const initials = getInitials(displayName);
+  const orderCount = orders.length;
 
   return (
     <AppShell>
@@ -50,18 +70,21 @@ export default function Account() {
           </View>
 
           <View style={styles.profileRow}>
-            <View style={styles.avatarWrap}>
+            <Pressable
+              style={styles.avatarWrap}
+              onPress={() => suspended && setShowSuspendedModal(true)}
+              testID="account-profile-icon">
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{initials}</Text>
               </View>
               {firebaseUser ? (
                 <View style={styles.checkBadge}>
-                  <Ionicons name="checkmark" size={11} color={colors.white} />
+                  <Ionicons name={suspended ? 'lock-closed' : 'checkmark'} size={11} color={colors.white} />
                 </View>
               ) : null}
-            </View>
+            </Pressable>
             <View>
-              <Text style={styles.greeting}>Good afternoon</Text>
+              <Text style={styles.greeting}>{getTimeOfDayGreeting()}</Text>
               <Text style={styles.name}>{displayName}</Text>
               <Text style={styles.editProfile}>Edit profile</Text>
             </View>
@@ -71,9 +94,11 @@ export default function Account() {
             <Text style={{ fontSize: 22 }}>🌾</Text>
             <View style={{ flex: 1, marginLeft: spacing.sm }}>
               <Text style={styles.rewardsEyebrow}>FIELD NOTES</Text>
-              <Text style={styles.rewardsPoints}>{mockUser.points.toLocaleString()} points</Text>
+              <Text style={styles.rewardsPoints}>{loyalty.points.toLocaleString()} points</Text>
               <Text style={styles.rewardsSubtitle}>
-                {mockUser.pointsToNextReward} points to your next £{mockUser.rewardValue} reward
+                {loyalty.points > 0
+                  ? `${loyalty.pointsToNextReward} points to your next £${loyalty.rewardValue} reward`
+                  : 'Earn points on every order'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.forest} />
@@ -82,15 +107,15 @@ export default function Account() {
 
         <View style={styles.statsRow}>
           <Pressable style={styles.statCard} onPress={() => router.push('/orders')}>
-            <Text style={styles.statValue}>3</Text>
+            <Text style={styles.statValue}>{orderCount}</Text>
             <Text style={styles.statLabel}>Orders</Text>
           </Pressable>
           <Pressable style={styles.statCard} onPress={() => router.push('/saved')}>
-            <Text style={styles.statValue}>6</Text>
+            <Text style={styles.statValue}>{favourites.length}</Text>
             <Text style={styles.statLabel}>Saved</Text>
           </Pressable>
           <Pressable style={styles.statCard} onPress={() => router.push('/rewards')}>
-            <Text style={styles.statValue}>£10</Text>
+            <Text style={styles.statValue}>£{loyalty.rewardValue}</Text>
             <Text style={styles.statLabel}>Rewards</Text>
           </Pressable>
         </View>
@@ -104,12 +129,22 @@ export default function Account() {
                 title={item.title}
                 subtitle={item.subtitle}
                 onPress={() => router.push(item.route as any)}
+                testID={`account-menu-${item.route.slice(1)}`}
               />
               {i < MENU.length - 1 ? <View style={styles.divider} /> : null}
             </React.Fragment>
           ))}
         </View>
       </ScrollView>
+
+      <AccountSuspendedModal
+        visible={showSuspendedModal}
+        onDismiss={() => setShowSuspendedModal(false)}
+        onContactSupport={() => {
+          setShowSuspendedModal(false);
+          router.push('/help');
+        }}
+      />
     </AppShell>
   );
 }

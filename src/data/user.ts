@@ -1,30 +1,19 @@
-export const user = {
-  name: 'Tracy Manoka',
-  initials: 'TM',
-  points: 1240,
-  pointsToNextReward: 260,
-  rewardValue: 5,
+// No delivery-address, payment-method, or loyalty backend exists yet —
+// these all start empty/zeroed rather than showing made-up personal data.
+// Real identity (name/email) comes from Firebase auth (see auth-context),
+// not from here.
+export type Address = {
+  id: string;
+  label: string;
+  icon: 'home' | 'business' | 'location';
+  line1: string;
+  line2: string;
+  isDefault: boolean;
 };
 
-export const addresses = [
-  {
-    id: 'home',
-    label: 'Home',
-    icon: 'home' as const,
-    line1: '12 Newlin Lane',
-    line2: 'London, E5 0NP',
-    isDefault: true,
-  },
-  {
-    id: 'work',
-    label: 'Work',
-    icon: 'business' as const,
-    line1: '1 Finsbury Avenue',
-    line2: 'London, EC2M 2PF',
-    isDefault: false,
-  },
-];
+export type PaymentMethod = { id: string; label: string; expiry: string };
 
-export const paymentMethods = [
-  { id: 'mastercard', label: 'Mastercard •••• 1842', expiry: 'Expires 09/29' },
-];
+export const addresses: Address[] = [];
+export const paymentMethods: PaymentMethod[] = [];
+
+export const loyalty = { points: 0, pointsToNextReward: 0, rewardValue: 0 };

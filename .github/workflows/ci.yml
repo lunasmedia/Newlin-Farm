@@ -19,3 +19,30 @@ jobs:
         run: npm ci
       - name: Run tests
         run: npm test --silent
+
+  api-types-check:
+    runs-on: ubuntu-latest
+    # Best-effort: the admin instance this checks against is a self-hosted
+    # Cloudflare Worker on the owner's own account, not a guaranteed-up
+    # production service. If it's unreachable, this job fails but never
+    # blocks the `test` job or merging — see the "wire it up" discussion for
+    # src/lib/newlin-api.types.generated.ts.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm ci
+      - name: Regenerate API types from the deployed admin contract
+        env:
+          NEWLIN_ADMIN_URL: https://newlin-farm-admin.lunasmedia19.workers.dev
+        run: npm run sync-api-types
+      - name: Fail if the checked-in types are stale
+        run: |
+          if ! git diff --exit-code -- src/lib/newlin-api.types.generated.ts; then
+            echo "::error file=src/lib/newlin-api.types.generated.ts::Generated API types are out of date. Run 'npm run sync-api-types' locally and commit the result."
+            exit 1
+          fi

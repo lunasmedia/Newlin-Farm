@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>TemplateExpoApp</string>
+	<string>Newlin Farm</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,14 +27,14 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>templateexpo</string>
-				<string>com.bradatlunasmedia.template-expo-app</string>
+				<string>newlinfarm</string>
+				<string>com.lunasmedia.newlinfarm</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>exp+template-expo-app</string>
+				<string>exp+newlin-farm</string>
 			</array>
 		</dict>
 	</array>

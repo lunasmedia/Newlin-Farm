@@ -12,12 +12,14 @@ export function ScreenHeader({
   onBack,
   right,
   showBack = true,
+  backTestID,
 }: {
   eyebrow?: string;
   title?: string;
   onBack?: () => void;
   right?: React.ReactNode;
   showBack?: boolean;
+  backTestID?: string;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -26,7 +28,7 @@ export function ScreenHeader({
     <View style={[styles.wrap, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.row}>
         {showBack ? (
-          <IconCircle name="chevron-back" onPress={onBack ?? (() => router.back())} />
+          <IconCircle name="chevron-back" onPress={onBack ?? (() => router.back())} testID={backTestID} />
         ) : (
           <View style={{ width: 44 }} />
         )}

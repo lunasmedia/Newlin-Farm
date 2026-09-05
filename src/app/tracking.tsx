@@ -1,28 +1,58 @@
 import React from 'react';
-import { View, Text, Pressable, Linking, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconCircle } from '@/components/ui/IconCircle';
-import { currentOrder } from '@/data/orders';
+import { useOrders } from '@/state/orders-context';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
+
+// Same status list as orders.tsx's progress card — kept in sync there
+// rather than shared, since this is the only other place it's used.
+const PROGRESS_STEPS = ['Confirmed', 'Packing', 'Out for delivery', 'Delivered'];
 
 export default function Tracking() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { currentOrder } = useOrders();
+  // Captured locally so TS narrows it through the JSX closures below —
+  // narrowing an imported const doesn't reliably persist into callbacks.
+  const order = currentOrder;
+
+  if (!order) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+          <IconCircle name="chevron-back" onPress={() => router.back()} />
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={{ fontSize: 32 }}>📦</Text>
+          <Text style={styles.emptyTitle}>Nothing to track right now</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const stepIndex = PROGRESS_STEPS.indexOf(order.status);
+  const driverInitials = order.driver
+    ? order.driver.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
+    : '–';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <IconCircle name="chevron-back" onPress={() => router.back()} />
         <View style={{ alignItems: 'center' }}>
-          <Text style={styles.eta}>Arriving by {currentOrder.eta}</Text>
-          <Text style={styles.orderId}>Order {currentOrder.id}</Text>
+          <Text style={styles.eta}>{order.eta ? `Arriving by ${order.eta}` : order.status}</Text>
+          <Text style={styles.orderId}>Order {order.id}</Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
 
+      {/* Schematic, not a real live map — there's no GPS tracking behind
+          this app, only an order status. */}
       <View style={styles.map}>
         {Array.from({ length: 6 }).map((_, i) => (
           <View key={i} style={[styles.stripe, { left: -100 + i * 90 }]} />
@@ -37,38 +67,36 @@ export default function Tracking() {
           <Ionicons name="home" size={18} color={colors.white} />
         </View>
         <View style={styles.etaPill}>
-          <Text style={styles.etaPillText}>{currentOrder.driver} is {currentOrder.minutesAway} minutes away</Text>
+          <Text style={styles.etaPillText}>{order.status}</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
-        <View style={styles.driverCard}>
-          <View style={styles.driverAvatar}>
-            <Text style={styles.driverInitials}>MM</Text>
+        {order.driver ? (
+          <View style={styles.driverCard}>
+            <View style={styles.driverAvatar}>
+              <Text style={styles.driverInitials}>{driverInitials}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.driverName}>{order.driver} is your driver</Text>
+              <Text style={styles.driverMeta}>Electric delivery bike</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.driverName}>{currentOrder.driver} is your driver</Text>
-            <Text style={styles.driverMeta}>Electric delivery bike · 4.9 ★</Text>
-          </View>
-          <Pressable style={styles.callBtn} onPress={() => Linking.openURL('tel:+441234567890')}>
-            <Ionicons name="call" size={18} color={colors.forest} />
-          </Pressable>
-        </View>
+        ) : null}
 
         <View style={styles.timeline}>
-          {currentOrder.timeline.map((step, i) => (
-            <View key={step.label} style={styles.timelineRow}>
+          {PROGRESS_STEPS.map((label, i) => (
+            <View key={label} style={styles.timelineRow}>
               <View style={styles.timelineLeft}>
-                <View style={[styles.dot, (step.done || step.active) && styles.dotOn]}>
-                  <Text style={[styles.dotText, (step.done || step.active) && styles.dotTextOn]}>
-                    {step.done ? '✓' : i + 1}
+                <View style={[styles.dot, i <= stepIndex && styles.dotOn]}>
+                  <Text style={[styles.dotText, i <= stepIndex && styles.dotTextOn]}>
+                    {i < stepIndex ? '✓' : i + 1}
                   </Text>
                 </View>
-                {i < currentOrder.timeline.length - 1 ? <View style={styles.line} /> : null}
+                {i < PROGRESS_STEPS.length - 1 ? <View style={styles.line} /> : null}
               </View>
               <View style={{ paddingBottom: spacing.lg }}>
-                <Text style={styles.stepLabel}>{step.label}</Text>
-                <Text style={styles.stepTime}>{step.time}</Text>
+                <Text style={styles.stepLabel}>{label}</Text>
               </View>
             </View>
           ))}
@@ -84,6 +112,8 @@ export default function Tracking() {
 }
 
 const styles = StyleSheet.create({
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  emptyTitle: { fontFamily: fonts.serifBold, fontSize: 18, color: colors.ink },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   eta: { fontSize: 13, color: colors.muted },
   orderId: { fontFamily: fonts.serifBold, fontSize: 20, color: colors.ink },
@@ -115,7 +145,6 @@ const styles = StyleSheet.create({
   driverInitials: { color: colors.white, fontWeight: '800' },
   driverName: { fontSize: 16, fontWeight: '800', color: colors.ink },
   driverMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  callBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
   timeline: { marginTop: spacing.xl },
   timelineRow: { flexDirection: 'row', gap: spacing.sm },
   timelineLeft: { alignItems: 'center', width: 32 },
@@ -125,7 +154,6 @@ const styles = StyleSheet.create({
   dotTextOn: { color: colors.white },
   line: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 4 },
   stepLabel: { fontSize: 17, fontWeight: '800', color: colors.ink },
-  stepTime: { fontSize: 13, color: colors.muted, marginTop: 2 },
   helpRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,18 +1,39 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { colors } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 import { Logo } from '@/components/ui/LogoMark';
+import { useAuth } from '@/state/auth-context';
 
 const { width } = Dimensions.get('window');
 
 export default function Splash() {
   const router = useRouter();
+  const { user, loading } = useAuth();
+
+  // Firebase persists the signed-in session across app kills (see
+  // lib/firebase.ts's getReactNativePersistence), but nothing previously
+  // checked that on launch — this screen always required a fresh
+  // onboarding/sign-in tap, even for someone already signed in. Once the
+  // persisted session resolves, skip straight to home instead. A genuinely
+  // signed-out user (or a fresh install, which has nothing to restore) just
+  // sees the normal tap-to-begin flow below, unchanged.
+  useEffect(() => {
+    if (!loading && user) router.replace('/home');
+  }, [loading, user, router]);
+
+  const goToWelcome = () => {
+    // Ignore taps until the persisted-session check settles, and ignore
+    // them outright if it turns out there is one — the effect above is
+    // already navigating to /home in that case.
+    if (loading || user) return;
+    router.replace('/welcome');
+  };
 
   return (
-    <Pressable style={styles.wrap} onPress={() => router.replace('/welcome')}>
+    <Pressable style={styles.wrap} onPress={goToWelcome}>
       <StatusBar style="light" />
       <View style={styles.circleOuter} pointerEvents="none">
         <View style={styles.circleInner}>

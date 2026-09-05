@@ -1,4 +1,4 @@
-package com.bradatlunasmedia.templateexpoapp
+package com.lunasmedia.newlinfarm
 
 import android.app.Application
 import android.content.res.Configuration

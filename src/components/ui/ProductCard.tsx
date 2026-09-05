@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Product } from '@/data/products';
 import { useFavourites } from '@/state/favourites-context';
 import { useBasket } from '@/state/basket-context';
+import { useBasketFeedback } from '@/state/basket-feedback-context';
 import { colors, radii, spacing, shadow } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -12,6 +13,7 @@ export function ProductCard({ product, width }: { product: Product; width?: numb
   const router = useRouter();
   const { isFavourite, toggle } = useFavourites();
   const { add } = useBasket();
+  const { showAddedToBasket } = useBasketFeedback();
   const fav = isFavourite(product.id);
 
   return (
@@ -56,7 +58,9 @@ export function ProductCard({ product, width }: { product: Product; width?: numb
             onPress={(e) => {
               e.stopPropagation();
               add(product.id);
+              showAddedToBasket(product, 1);
             }}
+            testID={`add-to-basket-${product.id}`}
             style={styles.addBtn}>
             <Ionicons name="add" size={18} color={colors.white} />
           </Pressable>

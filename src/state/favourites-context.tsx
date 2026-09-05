@@ -1,24 +1,19 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { products as allProducts } from '@/data/products';
+import { Product } from '@/data/products';
+import { useCatalog } from '@/state/catalog-context';
 
 type FavouritesContextValue = {
   ids: string[];
   isFavourite: (id: string) => boolean;
   toggle: (id: string) => void;
-  favourites: typeof allProducts;
+  favourites: Product[];
 };
 
 const FavouritesContext = createContext<FavouritesContextValue | null>(null);
 
 export function FavouritesProvider({ children }: { children: React.ReactNode }) {
-  const [ids, setIds] = useState<string[]>([
-    'strawberries',
-    'avocados',
-    'sourdough',
-    'eggs',
-    'oat-milk',
-    'apples',
-  ]);
+  const { products: catalogProducts } = useCatalog();
+  const [ids, setIds] = useState<string[]>([]);
 
   const toggle = useCallback((id: string) => {
     setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -27,8 +22,8 @@ export function FavouritesProvider({ children }: { children: React.ReactNode }) 
   const isFavourite = useCallback((id: string) => ids.includes(id), [ids]);
 
   const favourites = useMemo(
-    () => allProducts.filter((p) => ids.includes(p.id)),
-    [ids]
+    () => catalogProducts.filter((p) => ids.includes(p.id)),
+    [ids, catalogProducts]
   );
 
   return (

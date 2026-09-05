@@ -1,23 +1,41 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { addresses } from '@/data/user';
+import { useAddresses } from '@/state/addresses-context';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
 export default function Addresses() {
+  const router = useRouter();
+  const { addresses, removeAddress, setDefaultAddress } = useAddresses();
+
+  const confirmRemove = (id: string, label: string) => {
+    Alert.alert('Remove address', `Remove "${label}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeAddress(id) },
+    ]);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScreenHeader eyebrow="Where should we bring it?" title="Delivery addresses" />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
-        <Pressable style={styles.addBtn}>
+        <Pressable style={styles.addBtn} onPress={() => router.push('/add-address')}>
           <Ionicons name="add" size={16} color={colors.forest} />
           <Text style={styles.addBtnText}>Add a new address</Text>
         </Pressable>
 
+        {addresses.length === 0 ? (
+          <Text style={styles.empty}>No saved addresses yet — add one above.</Text>
+        ) : null}
+
         {addresses.map((a) => (
-          <View key={a.id} style={[styles.card, a.isDefault && styles.cardActive]}>
+          <Pressable
+            key={a.id}
+            style={[styles.card, a.isDefault && styles.cardActive]}
+            onPress={() => setDefaultAddress(a.id)}>
             <View style={styles.iconWrap}>
               <Ionicons name={a.icon} size={20} color={colors.forest} />
             </View>
@@ -27,8 +45,10 @@ export default function Addresses() {
               <Text style={styles.line}>{a.line2}</Text>
               {a.isDefault ? <Text style={styles.defaultTag}>Default address</Text> : null}
             </View>
-            <Ionicons name="ellipsis-horizontal" size={18} color={colors.ink} />
-          </View>
+            <Pressable hitSlop={8} onPress={() => confirmRemove(a.id, a.label)}>
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.ink} />
+            </Pressable>
+          </Pressable>
         ))}
 
         <View style={styles.mapCard}>
@@ -62,6 +82,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   addBtnText: { fontSize: 15, fontWeight: '800', color: colors.forest },
+  empty: { fontSize: 14, color: colors.muted, textAlign: 'center', marginBottom: spacing.lg },
   card: {
     flexDirection: 'row',
     gap: spacing.sm,

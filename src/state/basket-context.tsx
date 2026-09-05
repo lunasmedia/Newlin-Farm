@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
-import { Product, getProduct } from '@/data/products';
+import { Product } from '@/data/products';
+import { useCatalog } from '@/state/catalog-context';
 
 type BasketItem = { productId: string; qty: number };
 
@@ -19,11 +20,8 @@ type BasketContextValue = {
 const BasketContext = createContext<BasketContextValue | null>(null);
 
 export function BasketProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<BasketItem[]>([
-    { productId: 'strawberries', qty: 1 },
-    { productId: 'sourdough', qty: 1 },
-    { productId: 'oat-milk', qty: 2 },
-  ]);
+  const { products: catalogProducts } = useCatalog();
+  const [items, setItems] = useState<BasketItem[]>([]);
   const [smartSubstitutions, setSmartSubstitutions] = useState(true);
 
   const setQty = useCallback((productId: string, qty: number) => {
@@ -57,11 +55,11 @@ export function BasketProvider({ children }: { children: React.ReactNode }) {
     () =>
       items
         .map((i) => {
-          const p = getProduct(i.productId);
+          const p = catalogProducts.find((cp) => cp.id === i.productId);
           return p ? { ...p, qty: i.qty } : null;
         })
         .filter((p): p is Product & { qty: number } => Boolean(p)),
-    [items]
+    [items, catalogProducts]
   );
 
   const totalCount = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);

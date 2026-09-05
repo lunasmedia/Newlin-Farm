@@ -7,14 +7,14 @@ import { IconCircle } from '@/components/ui/IconCircle';
 import { ProductCard } from '@/components/ui/ProductCard';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
-import { categories } from '@/data/categories';
-import { products } from '@/data/products';
+import { useCatalog } from '@/state/catalog-context';
 
 const POPULAR = ['Strawberries', 'Sourdough', 'Milk', 'Offers', 'Dinner tonight'];
 
 export default function Search() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { products, categories } = useCatalog();
   const [query, setQuery] = useState('');
 
   const results = useMemo(() => {
@@ -23,7 +23,7 @@ export default function Search() {
     return products.filter(
       (p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
     );
-  }, [query]);
+  }, [query, products]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>

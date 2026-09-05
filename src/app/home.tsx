@@ -6,7 +6,6 @@ import {
   Image,
   Pressable,
   ScrollView,
-  RefreshControl,
   Platform,
   StyleSheet,
 } from 'react-native';
@@ -16,21 +15,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { ProductCard } from '@/components/ui/ProductCard';
+import { AppRefreshControl } from '@/components/ui/AppRefreshControl';
 import { colors, radii, spacing, shadow } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
-import { categories } from '@/data/categories';
-import { products } from '@/data/products';
 import { useAuth } from '@/state/auth-context';
 import { useBasket } from '@/state/basket-context';
+import { useCatalog } from '@/state/catalog-context';
+import { useAddresses } from '@/state/addresses-context';
+import { normalizeStoreSettings } from '@/utils/store-settings';
 
-// Short, single-word labels for the top nav row only — the full category
-// names (used everywhere else) are too long to fit four across one row.
-const TOP_NAV_CATEGORIES = [
-  { slug: 'fruit-veg', emoji: '🥕', label: 'Fruit' },
-  { slug: 'bakery', emoji: '🥖', label: 'Bakery' },
-  { slug: 'dairy-eggs', emoji: '🥛', label: 'Dairy' },
-  { slug: 'meat-fish', emoji: '🥩', label: 'Meat' },
-];
+// Used only if the catalogue has no active promotions (first frame before
+// the fetch settles, offline with no cached promotions, or an admin has
+// deactivated all of them) — keeps the hero from ever rendering empty.
+const FALLBACK_HERO = {
+  eyebrow: 'WEEKEND HARVEST',
+  title: 'Fresh from our fields.',
+  subtitle: 'Save 20% on seasonal fruit and veg.',
+  ctaLabel: 'Shop the harvest',
+  ctaRoute: '/shop?category=fruit-veg',
+  imageUrl: undefined as string | undefined,
+};
 
 // How much scroll distance the collapse/expand plays out over. Tuned to
 // roughly the combined natural height of the nav row + address row.
@@ -108,6 +112,13 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { user: authUser, loading } = useAuth();
   const { totalCount } = useBasket();
+  const { products, categories, promotions, settings, refresh } = useCatalog();
+  const { defaultAddress } = useAddresses();
+  // Falls back to the original bundled copy if the catalogue has no active
+  // promotions yet (first frame before the fetch settles, or none active).
+  const hero = promotions[0] ?? FALLBACK_HERO;
+  const storeSettings = normalizeStoreSettings(settings);
+  const deliverValue = defaultAddress ? defaultAddress.line2 || defaultAddress.line1 : 'Add an address';
   // Extra breathing room below the safe area (status bar / Dynamic Island),
   // not just the bare minimum needed to clear it.
   const headerTopOffset = insets.top + spacing.xl;
@@ -151,15 +162,6 @@ export default function Home() {
     if (!loading && !authUser) router.replace('/sign-in');
   }, [authUser, loading, router]);
 
-  const [refreshing, setRefreshing] = useState(false);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    // Nothing to actually re-fetch (all data here is static/local) — this
-    // just gives the gesture the feedback a real refresh would.
-    setTimeout(() => setRefreshing(false), 1200);
-  };
-
   return (
     <AppShell>
       <View style={{ flex: 1 }}>
@@ -173,24 +175,30 @@ export default function Home() {
           contentInset={Platform.OS === 'ios' ? { top: expandedHeaderHeight } : undefined}
           contentOffset={Platform.OS === 'ios' ? { x: 0, y: -expandedHeaderHeight } : undefined}
           contentInsetAdjustmentBehavior="never"
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.forest} />
-          }
+          refreshControl={<AppRefreshControl onRefresh={refresh} />}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: false,
           })}
           scrollEventThrottle={16}>
-          <Pressable style={styles.hero} onPress={() => router.push('/shop?category=fruit-veg')}>
+          {storeSettings.announcement ? (
+            <View style={styles.announcementBar}>
+              <Ionicons name="megaphone-outline" size={14} color={colors.forest} />
+              <Text style={styles.announcementText} numberOfLines={2}>
+                {storeSettings.announcement}
+              </Text>
+            </View>
+          ) : null}
+          <Pressable style={styles.hero} onPress={() => router.push(hero.ctaRoute as any)}>
           <View style={styles.heroText}>
             <View style={styles.heroTag}>
-              <Text style={styles.heroTagText}>WEEKEND HARVEST</Text>
+              <Text style={styles.heroTagText}>{hero.eyebrow}</Text>
             </View>
-            <Text style={styles.heroTitle}>Fresh from{'\n'}our fields.</Text>
-            <Text style={styles.heroSubtitle}>Save 20% on seasonal fruit and veg.</Text>
-            <Text style={styles.heroLink}>Shop the harvest →</Text>
+            <Text style={styles.heroTitle}>{hero.title}</Text>
+            <Text style={styles.heroSubtitle}>{hero.subtitle}</Text>
+            <Text style={styles.heroLink}>{hero.ctaLabel} →</Text>
           </View>
           <Image
-            source={require('@/assets/farm/hero-bag.png')}
+            source={hero.imageUrl ? { uri: hero.imageUrl } : require('@/assets/farm/hero-bag.png')}
             style={styles.heroImage}
             resizeMode="cover"
           />
@@ -255,13 +263,17 @@ export default function Home() {
                   const height = e.nativeEvent.layout.height;
                   setNavRowHeight((h) => h ?? height);
                 }}>
-                {TOP_NAV_CATEGORIES.map((cat) => (
+                {categories.slice(0, 4).map((cat) => (
                   <Pressable
                     key={cat.slug}
                     style={styles.navItem}
                     onPress={() => router.push(`/shop?category=${cat.slug}`)}>
                     <Text style={styles.navIcon}>{cat.emoji}</Text>
-                    <Text style={styles.navLabel}>{cat.label}</Text>
+                    {/* First word only — the full name (used everywhere
+                        else) is too long to fit four across one row, and
+                        this is admin-entered/arbitrary now rather than a
+                        fixed, known-short set. */}
+                    <Text style={styles.navLabel}>{cat.name.split(' ')[0]}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -278,11 +290,11 @@ export default function Home() {
                 const height = e.nativeEvent.layout.height;
                 setDeliverRowHeight((h) => h ?? height);
               }}>
-              <Pressable>
+              <Pressable onPress={() => router.push('/addresses')}>
                 <Text style={styles.deliverLabel}>Delivering to</Text>
                 <View style={styles.deliverRow}>
                   <Text style={styles.deliverValue} numberOfLines={1}>
-                    E5 0NP · Clapton
+                    {deliverValue}
                   </Text>
                   <Ionicons name="chevron-down" size={14} color={colors.ink} />
                 </View>
@@ -408,6 +420,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  announcementBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.sage,
+    borderRadius: radii.pill,
+  },
+  announcementText: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.forestDark },
   hero: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,

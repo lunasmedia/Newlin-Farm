@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconCircle } from '@/components/ui/IconCircle';
 import { ListRow } from '@/components/ui/ListRow';
-import { user } from '@/data/user';
+import { loyalty } from '@/data/user';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -17,7 +17,8 @@ const WAYS_TO_EARN = [
 export default function Rewards() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const progress = user.points / (user.points + user.pointsToNextReward);
+  const target = loyalty.points + loyalty.pointsToNextReward;
+  const progress = target > 0 ? loyalty.points / target : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -33,13 +34,13 @@ export default function Rewards() {
 
         <View style={styles.ringOuter}>
           <View style={styles.ring}>
-            <Text style={styles.ringValue}>{user.points.toLocaleString()}</Text>
+            <Text style={styles.ringValue}>{loyalty.points.toLocaleString()}</Text>
             <Text style={styles.ringLabel}>points</Text>
           </View>
         </View>
 
-        <Text style={styles.untilText}>{user.pointsToNextReward} points until your next</Text>
-        <Text style={styles.rewardText}>£{user.rewardValue} Newlin reward</Text>
+        <Text style={styles.untilText}>{loyalty.pointsToNextReward} points until your next</Text>
+        <Text style={styles.rewardText}>£{loyalty.rewardValue} Newlin reward</Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${Math.min(100, progress * 100)}%` }]} />
         </View>
@@ -48,7 +49,7 @@ export default function Rewards() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>£{user.rewardValue}</Text>
+            <Text style={styles.statValue}>£{loyalty.rewardValue}</Text>
             <Text style={styles.statTitle}>Available reward</Text>
             <Text style={styles.statSubtitle}>Use at checkout</Text>
           </View>

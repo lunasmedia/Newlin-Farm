@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconCircle } from '@/components/ui/IconCircle';
@@ -9,21 +9,84 @@ import { Button } from '@/components/ui/Button';
 import { Divider } from '@/components/ui/Divider';
 import { useCheckout } from '@/state/checkout-context';
 import { useBasket } from '@/state/basket-context';
-import { addresses, paymentMethods } from '@/data/user';
+import { useAddresses } from '@/state/addresses-context';
+import { useAuth } from '@/state/auth-context';
+import { useOrders } from '@/state/orders-context';
+import { useCatalog } from '@/state/catalog-context';
+import { placeOrder as placeOrderRequest, SuspendedAccountError } from '@/lib/newlin-api';
+import { AccountSuspendedModal } from '@/components/account/AccountSuspendedModal';
+import { normalizeStoreSettings } from '@/utils/store-settings';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
 export default function CheckoutReview() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { slot } = useCheckout();
+  const { slot, paymentId } = useCheckout();
   const { products, totalCount, subtotal, clear } = useBasket();
-  const home = addresses[0];
-  const card = paymentMethods[0];
+  const { defaultAddress } = useAddresses();
+  const { user: firebaseUser } = useAuth();
+  const { refresh: refreshOrders } = useOrders();
+  const { settings } = useCatalog();
+  const [placing, setPlacing] = useState(false);
+  const [showSuspendedModal, setShowSuspendedModal] = useState(false);
+  const paymentLabel = paymentId === 'apple-pay' ? 'Apple Pay' : 'Card payment';
+  const { freeDeliveryThresholdPence } = normalizeStoreSettings(settings);
+  // Meeting the free-delivery threshold waives whatever the chosen slot
+  // would otherwise cost — same "free delivery over £X, any slot" model as
+  // basket.tsx's estimate, applied here for real once a slot is picked.
+  const freeDelivery = subtotal * 100 >= freeDeliveryThresholdPence;
+  const deliveryFeePence = freeDelivery ? 0 : slot.feePence;
+  const deliveryFee = deliveryFeePence / 100;
+  const grandTotal = subtotal + deliveryFee;
 
-  const placeOrder = () => {
-    clear();
-    router.replace('/order-confirmation');
+  const placeOrder = async () => {
+    if (!defaultAddress) {
+      Alert.alert('Add a delivery address', 'Choose a delivery address before placing your order.');
+      return;
+    }
+    if (!firebaseUser) {
+      Alert.alert('Sign in required', 'Sign in to place an order.');
+      return;
+    }
+    const { minimumOrderPence } = normalizeStoreSettings(settings);
+    if (Math.round(subtotal * 100) < minimumOrderPence) {
+      Alert.alert(
+        'Minimum order not met',
+        `Add more to your basket to reach the £${(minimumOrderPence / 100).toFixed(2)} minimum order.`
+      );
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      // Real ID token — the admin verifies it and derives the customer's
+      // identity from that (see lib/customer-auth.ts on the admin side)
+      // rather than trusting a client-supplied email, so this order can't
+      // be forged as someone else's.
+      const idToken = await firebaseUser.getIdToken();
+      const result = await placeOrderRequest(idToken, {
+        customerName: firebaseUser.displayName?.trim(),
+        itemCount: totalCount,
+        itemsPence: Math.round(subtotal * 100),
+        deliveryFeePence,
+        deliveryAddress: `${defaultAddress.line1}, ${defaultAddress.line2}`,
+      });
+      clear();
+      // Fire-and-forget — the orders list refetches in the background so
+      // it's already current by the time the user gets to the Orders tab,
+      // rather than still showing yesterday's snapshot from app launch.
+      void refreshOrders();
+      router.replace({ pathname: '/order-confirmation', params: { orderId: result.id, itemCount: String(totalCount) } });
+    } catch (error) {
+      if (error instanceof SuspendedAccountError) {
+        setShowSuspendedModal(true);
+      } else {
+        Alert.alert('Could not place order', error instanceof Error ? error.message : 'Please try again.');
+      }
+    } finally {
+      setPlacing(false);
+    }
   };
 
   return (
@@ -52,7 +115,7 @@ export default function CheckoutReview() {
           {slot.day}, {slot.time}
         </Text>
         <Text style={styles.sectionMuted}>
-          {home.line1}, {home.line2}
+          {defaultAddress ? `${defaultAddress.line1}, ${defaultAddress.line2}` : 'No delivery address set'}
         </Text>
         <Divider style={{ marginVertical: spacing.lg }} />
 
@@ -62,7 +125,7 @@ export default function CheckoutReview() {
             <Text style={styles.edit}>Edit</Text>
           </Pressable>
         </View>
-        <Text style={styles.sectionBold}>{card.label}</Text>
+        <Text style={styles.sectionBold}>{paymentLabel}</Text>
         <Text style={styles.sectionMuted}>Billing address matches delivery</Text>
         <Divider style={{ marginVertical: spacing.lg }} />
 
@@ -86,19 +149,35 @@ export default function CheckoutReview() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={styles.summaryValue}>{slot.price}</Text>
+            <Text style={styles.summaryValue}>{deliveryFee === 0 ? 'FREE' : `£${deliveryFee.toFixed(2)}`}</Text>
           </View>
           <Divider style={{ marginVertical: spacing.xs }} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabelBold}>Total</Text>
-            <Text style={styles.summaryValueBold}>£{subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryValueBold}>£{grandTotal.toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <Button label={`Place order · £${subtotal.toFixed(2)}`} arrow onPress={placeOrder} />
+        <Button
+          label={`Place order · £${grandTotal.toFixed(2)}`}
+          arrow
+          onPress={placeOrder}
+          loading={placing}
+          disabled={placing}
+          testID="place-order-button"
+        />
       </View>
+
+      <AccountSuspendedModal
+        visible={showSuspendedModal}
+        onDismiss={() => setShowSuspendedModal(false)}
+        onContactSupport={() => {
+          setShowSuspendedModal(false);
+          router.push('/help');
+        }}
+      />
     </View>
   );
 }

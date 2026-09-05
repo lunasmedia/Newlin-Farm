@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Linking, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { useCatalog } from '@/state/catalog-context';
+import { normalizeStoreSettings } from '@/utils/store-settings';
 import { colors, radii, spacing } from '@/theme/tokens';
 
 const QUESTIONS = [
@@ -15,6 +17,18 @@ const QUESTIONS = [
 export default function Help() {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const { settings } = useCatalog();
+  const { supportEmail } = normalizeStoreSettings(settings);
+
+  const emailSupport = async () => {
+    if (!supportEmail) {
+      Alert.alert('Email not available', 'No support email is set up yet.');
+      return;
+    }
+    const url = `mailto:${supportEmail}`;
+    if (await Linking.canOpenURL(url)) Linking.openURL(url);
+    else Alert.alert('Could not open Mail', `Email us directly at ${supportEmail}.`);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -42,6 +56,13 @@ export default function Help() {
             <Text style={styles.cardTitle}>Call us</Text>
             <Text style={styles.cardSubtitle}>8am to 8pm</Text>
           </View>
+          <Pressable style={styles.card} onPress={emailSupport} testID="help-email-support">
+            <Ionicons name="mail-outline" size={22} color={colors.forest} />
+            <Text style={styles.cardTitle}>Email us</Text>
+            <Text style={styles.cardSubtitle} numberOfLines={1}>
+              {supportEmail || 'Not set up'}
+            </Text>
+          </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Popular questions</Text>

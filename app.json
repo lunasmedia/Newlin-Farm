@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "TemplateExpoApp",
-    "slug": "template-expo-app",
-    "scheme": "templateexpo",
+    "name": "Newlin Farm",
+    "slug": "newlin-farm",
+    "scheme": "newlinfarm",
     "platforms": [
       "ios",
       "android",
@@ -14,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1E4A3B"
       },
-      "package": "com.bradatlunasmedia.templateexpoapp"
+      "package": "com.lunasmedia.newlinfarm"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -46,7 +46,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "bundleIdentifier": "com.bradatlunasmedia.template-expo-app"
+      "bundleIdentifier": "com.lunasmedia.newlinfarm"
     }
   }
 }

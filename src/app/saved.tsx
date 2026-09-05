@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ProductCard } from '@/components/ui/ProductCard';
 import { useFavourites } from '@/state/favourites-context';
 import { useBasket } from '@/state/basket-context';
+import { useBasketFeedback } from '@/state/basket-feedback-context';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -13,6 +14,7 @@ export default function Saved() {
   const insets = useSafeAreaInsets();
   const { favourites } = useFavourites();
   const { add } = useBasket();
+  const { showAddedToBasket } = useBasketFeedback();
 
   return (
     <AppShell>
@@ -39,7 +41,14 @@ export default function Saved() {
           </View>
           <Pressable
             style={styles.addAllBtn}
-            onPress={() => favourites.forEach((p) => add(p.id))}>
+            onPress={() => {
+              favourites.forEach((p) => add(p.id));
+              // The redesigned modal shows one product + a quantity, not a
+              // distinct "bulk, no single product" mode — the first
+              // favourite stands in, with the count communicating "more
+              // than one item" rather than literally that many of it.
+              if (favourites.length) showAddedToBasket(favourites[0], favourites.length);
+            }}>
             <Text style={styles.addAllText}>+ Add all</Text>
           </Pressable>
         </View>

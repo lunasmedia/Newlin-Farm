@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.bradatlunasmedia.templateexpoapp'
+    namespace 'com.lunasmedia.newlinfarm'
     defaultConfig {
-        applicationId 'com.bradatlunasmedia.templateexpoapp'
+        applicationId 'com.lunasmedia.newlinfarm'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

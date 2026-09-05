@@ -25,8 +25,8 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="templateexpo"/>
-        <data android:scheme="exp+template-expo-app"/>
+        <data android:scheme="newlinfarm"/>
+        <data android:scheme="exp+newlin-farm"/>
       </intent-filter>
     </activity>
   </application>

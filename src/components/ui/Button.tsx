@@ -13,6 +13,7 @@ export function Button({
   style,
   disabled,
   loading,
+  testID,
 }: {
   label: string;
   onPress?: () => void;
@@ -21,11 +22,13 @@ export function Button({
   style?: ViewStyle;
   disabled?: boolean;
   loading?: boolean;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      testID={testID}
       style={({ pressed }) => [
         styles.base,
         variant === 'primary' && styles.primary,

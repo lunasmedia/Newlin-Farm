@@ -25,13 +25,20 @@ export function TabBar() {
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
       {TABS.map((tab) => {
-        const active =
-          pathname === tab.route || (tab.route === '/account' && pathname === '/orders');
+        const onExactRoute = pathname === tab.route;
+        // Orders is a pushed sub-screen of Account (see account.tsx /
+        // orders.tsx), not its own tab, so it's styled as part of the
+        // Account tab here — but that's a visual grouping only. Whether a
+        // tap actually navigates still goes by the exact route: without
+        // this split, tapping the (visually active) Account tab while on
+        // Orders did nothing, leaving the tab bar as a dead end back to it.
+        const active = onExactRoute || (tab.route === '/account' && pathname === '/orders');
         return (
           <Pressable
             key={tab.route}
+            testID={`tab-${tab.route.slice(1)}`}
             onPress={() => {
-              if (!active) router.replace(tab.route as any);
+              if (!onExactRoute) router.replace(tab.route as any);
             }}
             style={styles.tab}>
             <View>

@@ -102,3 +102,17 @@ export const products: Product[] = [
 export function getProduct(id: string) {
   return products.find((p) => p.id === id);
 }
+
+// Bundled product photos, keyed by id — used as the offline/no-remote-image
+// fallback when rendering a product that came from the catalogue API (see
+// `src/state/catalog-context.tsx`). The app ships with these six regardless
+// of what the API returns, so the shop still has real photos even with no
+// network connection.
+export const productImageFallbacks: Record<string, ImageSourcePropType> = {
+  strawberries: require('@/assets/farm/strawberries.png'),
+  avocados: require('@/assets/farm/avocados.png'),
+  apples: require('@/assets/farm/apples.png'),
+  sourdough: require('@/assets/farm/sourdough.png'),
+  eggs: require('@/assets/farm/eggs.png'),
+  'oat-milk': require('@/assets/farm/oat-milk.png'),
+};

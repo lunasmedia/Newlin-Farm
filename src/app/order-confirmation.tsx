@@ -1,16 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
-import { currentOrder } from '@/data/orders';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
 export default function OrderConfirmation() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { orderId, itemCount } = useLocalSearchParams<{ orderId?: string; itemCount?: string }>();
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top + spacing.xxl }]}>
@@ -22,10 +22,10 @@ export default function OrderConfirmation() {
         </View>
       </View>
 
-      <Text style={styles.orderId}>ORDER {currentOrder.id}</Text>
+      <Text style={styles.orderId}>ORDER {orderId ?? '—'}</Text>
       <Text style={styles.title}>Your groceries{'\n'}are on their way.</Text>
       <Text style={styles.subtitle}>
-        We'll deliver today between 10:00 and 11:00. You can follow every step from the farm to
+        We&apos;ll deliver today between 10:00 and 11:00. You can follow every step from the farm to
         your door.
       </Text>
 
@@ -35,7 +35,7 @@ export default function OrderConfirmation() {
           <Text style={styles.cardTitle}>Arriving today</Text>
           <Text style={styles.cardSubtitle}>10:00 – 11:00</Text>
         </View>
-        <Text style={styles.cardItems}>{currentOrder.itemCount} items</Text>
+        <Text style={styles.cardItems}>{itemCount ?? '0'} items</Text>
       </View>
 
       <Button

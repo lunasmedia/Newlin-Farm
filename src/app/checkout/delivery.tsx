@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,30 +8,26 @@ import { Logo } from '@/components/ui/LogoMark';
 import { ProgressSteps } from '@/components/ui/ProgressSteps';
 import { Button } from '@/components/ui/Button';
 import { useCheckout } from '@/state/checkout-context';
-import { addresses } from '@/data/user';
+import { useAddresses } from '@/state/addresses-context';
+import { useCatalog } from '@/state/catalog-context';
+import { getUpcomingDeliveryDays } from '@/utils/format-date';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
-const DAYS = [
-  { day: 'Today', date: '17 Aug' },
-  { day: 'Tue', date: '18 Aug' },
-  { day: 'Wed', date: '19 Aug' },
-  { day: 'Thu', date: '20 Aug' },
-];
-
-const SLOTS = [
-  { time: '09:00 – 10:00', subtitle: 'One-hour window', price: '£1.50' },
-  { time: '10:00 – 11:00', subtitle: 'Most popular', price: 'FREE' },
-  { time: '12:00 – 13:00', subtitle: 'One-hour window', price: 'FREE' },
-  { time: '17:00 – 18:00', subtitle: 'One-hour window', price: '£2.00' },
-];
+function formatFee(feePence: number) {
+  return feePence === 0 ? 'FREE' : `£${(feePence / 100).toFixed(2)}`;
+}
 
 export default function CheckoutDelivery() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { slot, setSlot } = useCheckout();
+  const { defaultAddress } = useAddresses();
+  const { deliverySlots } = useCatalog();
+  // Computed once per visit to this screen, not a fixed range — recomputes
+  // against "now" each time so it never goes stale.
+  const DAYS = useMemo(() => getUpcomingDeliveryDays(4), []);
   const [day, setDay] = useState(DAYS[0]);
-  const home = addresses[0];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -49,19 +45,31 @@ export default function CheckoutDelivery() {
         <Text style={styles.title}>When should we arrive?</Text>
         <Text style={styles.subtitle}>Choose a one-hour delivery window for today.</Text>
 
-        <View style={styles.addressCard}>
-          <View style={styles.addressIcon}>
-            <Ionicons name="home" size={18} color={colors.forest} />
+        {defaultAddress ? (
+          <View style={styles.addressCard}>
+            <View style={styles.addressIcon}>
+              <Ionicons name="home" size={18} color={colors.forest} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressLabel}>{defaultAddress.label}</Text>
+              <Text style={styles.addressLine}>{defaultAddress.line1}</Text>
+              <Text style={styles.addressLine}>{defaultAddress.line2}</Text>
+            </View>
+            <Pressable onPress={() => router.push('/addresses')}>
+              <Text style={styles.change}>Change</Text>
+            </Pressable>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addressLabel}>{home.label}</Text>
-            <Text style={styles.addressLine}>{home.line1}</Text>
-            <Text style={styles.addressLine}>{home.line2}</Text>
-          </View>
-          <Pressable onPress={() => router.push('/addresses')}>
-            <Text style={styles.change}>Change</Text>
+        ) : (
+          <Pressable style={styles.addAddressCard} onPress={() => router.push('/add-address')}>
+            <View style={styles.addressIcon}>
+              <Ionicons name="add" size={18} color={colors.forest} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressLabel}>Add a delivery address</Text>
+              <Text style={styles.addressLine}>Needed before we can schedule a delivery</Text>
+            </View>
           </Pressable>
-        </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.lg }}>
           {DAYS.map((d) => {
@@ -79,18 +87,21 @@ export default function CheckoutDelivery() {
         </ScrollView>
 
         <Text style={styles.slotsTitle}>Available slots</Text>
-        {SLOTS.map((s) => {
+        {deliverySlots.length === 0 ? (
+          <Text style={styles.subtitle}>No delivery slots are available right now.</Text>
+        ) : null}
+        {deliverySlots.map((s) => {
           const active = slot.time === s.time;
           return (
             <Pressable
-              key={s.time}
-              onPress={() => setSlot({ day: day.day, date: day.date, time: s.time, price: s.price })}
+              key={s.id}
+              onPress={() => setSlot({ day: day.day, date: day.date, time: s.time, feePence: s.feePence })}
               style={[styles.slotRow, active && styles.slotRowActive]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.slotTime}>{s.time}</Text>
-                <Text style={styles.slotSubtitle}>{s.subtitle}</Text>
+                {s.subtitle ? <Text style={styles.slotSubtitle}>{s.subtitle}</Text> : null}
               </View>
-              <Text style={styles.slotPrice}>{s.price}</Text>
+              <Text style={styles.slotPrice}>{formatFee(s.feePence)}</Text>
               <View style={[styles.radio, active && styles.radioActive]}>
                 {active ? <View style={styles.radioDot} /> : null}
               </View>
@@ -100,7 +111,12 @@ export default function CheckoutDelivery() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <Button label="Continue" arrow onPress={() => router.push('/checkout/payment')} />
+        <Button
+          label="Continue"
+          arrow
+          disabled={!defaultAddress}
+          onPress={() => router.push('/checkout/payment')}
+        />
       </View>
     </View>
   );
@@ -123,6 +139,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: spacing.lg,
     backgroundColor: colors.white,
+  },
+  addAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.forest,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+    backgroundColor: colors.sage,
   },
   addressIcon: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
   addressLabel: { fontSize: 16, fontWeight: '800', color: colors.ink },

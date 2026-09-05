@@ -7,6 +7,8 @@ import { AppShell } from '@/components/layout/AppShell';
 import { QuantityStepper } from '@/components/ui/QuantityStepper';
 import { Button } from '@/components/ui/Button';
 import { useBasket } from '@/state/basket-context';
+import { useCatalog } from '@/state/catalog-context';
+import { normalizeStoreSettings } from '@/utils/store-settings';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -15,8 +17,24 @@ export default function Basket() {
   const insets = useSafeAreaInsets();
   const { products, totalCount, subtotal, setQty, smartSubstitutions, setSmartSubstitutions } =
     useBasket();
+  const { settings, deliverySlots } = useCatalog();
   const [promoOpen, setPromoOpen] = useState(false);
-  const freeDelivery = subtotal >= 10;
+  const { freeDeliveryThresholdPence, minimumOrderPence } = normalizeStoreSettings(settings);
+  const freeDeliveryThreshold = freeDeliveryThresholdPence / 100;
+  const minimumOrder = minimumOrderPence / 100;
+  const freeDelivery = subtotal >= freeDeliveryThreshold;
+  const remainingForFreeDelivery = Math.max(0, freeDeliveryThreshold - subtotal);
+  const freeDeliveryProgress = freeDeliveryThreshold > 0 ? Math.min(100, (subtotal / freeDeliveryThreshold) * 100) : 100;
+  const meetsMinimumOrder = subtotal >= minimumOrder;
+  const remainingForMinimumOrder = Math.max(0, minimumOrder - subtotal);
+  // The exact fee depends on which slot is picked on the next screen — this
+  // is just the best-case estimate shown before that choice, using the
+  // cheapest slot an admin currently offers (waived to £0 once the free
+  // delivery threshold above is met, same as checkout applies it later).
+  const cheapestSlotFeePence = deliverySlots.length
+    ? Math.min(...deliverySlots.map((s) => s.feePence))
+    : 0;
+  const estimatedDeliveryFee = freeDelivery ? 0 : cheapestSlotFeePence / 100;
 
   if (products.length === 0) {
     return (
@@ -43,16 +61,29 @@ export default function Basket() {
           </View>
         </View>
 
-        {freeDelivery ? (
+        {freeDeliveryThreshold > 0 ? (
           <View style={styles.freeBanner}>
             <Text style={{ fontSize: 22 }}>🚲</Text>
             <View style={{ flex: 1, marginLeft: spacing.sm }}>
-              <Text style={styles.freeTitle}>You've unlocked free delivery</Text>
-              <Text style={styles.freeSubtitle}>Nice one, neighbour.</Text>
+              <Text style={styles.freeTitle}>
+                {freeDelivery
+                  ? "You've unlocked free delivery"
+                  : `Add £${remainingForFreeDelivery.toFixed(2)} more for free delivery`}
+              </Text>
+              <Text style={styles.freeSubtitle}>{freeDelivery ? 'Nice one, neighbour.' : "You're getting close!"}</Text>
               <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: '100%' }]} />
+                <View style={[styles.progressFill, { width: `${freeDeliveryProgress}%` }]} />
               </View>
             </View>
+          </View>
+        ) : null}
+
+        {!meetsMinimumOrder && minimumOrder > 0 ? (
+          <View style={styles.minOrderNotice}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.coral} />
+            <Text style={styles.minOrderText}>
+              Add £{remainingForMinimumOrder.toFixed(2)} more to reach the £{minimumOrder.toFixed(2)} minimum order.
+            </Text>
           </View>
         ) : null}
 
@@ -102,22 +133,27 @@ export default function Basket() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={styles.summaryValue}>{freeDelivery ? 'FREE' : '£1.50'}</Text>
+            <Text style={styles.summaryValue}>
+              {estimatedDeliveryFee === 0 ? 'FREE' : `From £${estimatedDeliveryFee.toFixed(2)}`}
+            </Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabelBold}>Estimated total</Text>
-            <Text style={styles.summaryValueBold}>
-              £{(subtotal + (freeDelivery ? 0 : 1.5)).toFixed(2)}
-            </Text>
+            <Text style={styles.summaryValueBold}>£{(subtotal + estimatedDeliveryFee).toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
         <Button
-          label={`Choose delivery · £${(subtotal + (freeDelivery ? 0 : 1.5)).toFixed(2)}`}
+          label={
+            meetsMinimumOrder
+              ? `Choose delivery · £${(subtotal + estimatedDeliveryFee).toFixed(2)}`
+              : `Minimum order £${minimumOrder.toFixed(2)}`
+          }
           arrow
+          disabled={!meetsMinimumOrder}
           onPress={() => router.push('/checkout/delivery')}
         />
       </View>
@@ -149,6 +185,17 @@ const styles = StyleSheet.create({
   freeSubtitle: { color: '#CFE0D6', fontSize: 12, marginTop: 2 },
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 2, marginTop: spacing.sm, overflow: 'hidden' },
   progressFill: { height: 4, backgroundColor: colors.gold, borderRadius: 2 },
+  minOrderNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.lg,
+    backgroundColor: colors.blush,
+  },
+  minOrderText: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.coral },
   list: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
   row: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.md, alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },

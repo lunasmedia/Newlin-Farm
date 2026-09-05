@@ -1,4 +1,4 @@
-package com.bradatlunasmedia.templateexpoapp
+package com.lunasmedia.newlinfarm
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

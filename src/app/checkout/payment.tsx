@@ -8,7 +8,7 @@ import { Logo } from '@/components/ui/LogoMark';
 import { ProgressSteps } from '@/components/ui/ProgressSteps';
 import { Button } from '@/components/ui/Button';
 import { useCheckout } from '@/state/checkout-context';
-import { paymentMethods } from '@/data/user';
+import { loyalty } from '@/data/user';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
 
@@ -17,7 +17,6 @@ export default function CheckoutPayment() {
   const insets = useSafeAreaInsets();
   const { paymentId, setPaymentId, useFieldNotes, setUseFieldNotes } = useCheckout();
   const [billingSame, setBillingSame] = useState(true);
-  const card = paymentMethods[0];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -35,24 +34,18 @@ export default function CheckoutPayment() {
         <Text style={styles.title}>How would you like to pay?</Text>
         <Text style={styles.subtitle}>Payments are encrypted and securely processed.</Text>
 
-        <Pressable
-          onPress={() => setPaymentId(card.id)}
-          style={[styles.optionRow, paymentId === card.id && styles.optionRowActive]}>
+        {/* Not selectable — a saved card means real card data (PAN/expiry)
+            with no payment processor behind it, so this stays a visual
+            placeholder rather than a working option. */}
+        <View style={[styles.optionRow, styles.optionRowDisabled]}>
           <View style={styles.optionIcon}>
-            <Ionicons name="card" size={18} color={colors.forest} />
+            <Ionicons name="card" size={18} color={colors.mutedLight} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.optionTitle}>{card.label}</Text>
-            <Text style={styles.optionSubtitle}>{card.expiry}</Text>
+            <Text style={[styles.optionTitle, styles.optionTitleDisabled]}>Card payment</Text>
+            <Text style={styles.optionSubtitle}>Coming soon</Text>
           </View>
-          {paymentId === card.id ? (
-            <View style={styles.checkCircle}>
-              <Ionicons name="checkmark" size={14} color={colors.white} />
-            </View>
-          ) : (
-            <View style={styles.radio} />
-          )}
-        </Pressable>
+        </View>
 
         <Pressable
           onPress={() => setPaymentId('apple-pay')}
@@ -69,17 +62,6 @@ export default function CheckoutPayment() {
           </View>
         </Pressable>
 
-        <Pressable style={styles.optionRow}>
-          <View style={styles.optionIcon}>
-            <Ionicons name="add" size={18} color={colors.forest} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.optionTitle}>Add a new card</Text>
-            <Text style={styles.optionSubtitle}>Credit or debit card</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.mutedLight} />
-        </Pressable>
-
         <Pressable style={styles.checkboxRow} onPress={() => setBillingSame((v) => !v)}>
           <View style={[styles.checkbox, billingSame && styles.checkboxOn]}>
             {billingSame ? <Ionicons name="checkmark" size={14} color={colors.white} /> : null}
@@ -87,20 +69,24 @@ export default function CheckoutPayment() {
           <Text style={styles.checkboxLabel}>Billing address is the same as delivery</Text>
         </Pressable>
 
-        <View style={styles.fieldNotes}>
-          <View style={styles.optionIcon}>
-            <Ionicons name="leaf" size={18} color={colors.forest} />
+        {/* Only appears once there's a real points balance to redeem — no
+            fabricated "you have 500 points" here. */}
+        {loyalty.points > 0 ? (
+          <View style={styles.fieldNotes}>
+            <View style={styles.optionIcon}>
+              <Ionicons name="leaf" size={18} color={colors.forest} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.optionTitle}>Use {loyalty.points} Field Notes</Text>
+              <Text style={styles.optionSubtitle}>Take £{loyalty.rewardValue.toFixed(2)} off this order</Text>
+            </View>
+            <Pressable
+              onPress={() => setUseFieldNotes(!useFieldNotes)}
+              style={[styles.toggle, useFieldNotes && styles.toggleOn]}>
+              <View style={[styles.toggleThumb, useFieldNotes && styles.toggleThumbOn]} />
+            </Pressable>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.optionTitle}>Use 500 Field Notes</Text>
-            <Text style={styles.optionSubtitle}>Take £5.00 off this order</Text>
-          </View>
-          <Pressable
-            onPress={() => setUseFieldNotes(!useFieldNotes)}
-            style={[styles.toggle, useFieldNotes && styles.toggleOn]}>
-            <View style={[styles.toggleThumb, useFieldNotes && styles.toggleThumbOn]} />
-          </Pressable>
-        </View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
@@ -129,8 +115,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   optionRowActive: { borderColor: colors.forest, backgroundColor: colors.sage },
+  optionRowDisabled: { opacity: 0.55 },
   optionIcon: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: '#EDF1E4', alignItems: 'center', justifyContent: 'center' },
   optionTitle: { fontSize: 16, fontWeight: '800', color: colors.ink },
+  optionTitleDisabled: { color: colors.muted },
   optionSubtitle: { fontSize: 12, color: colors.muted, marginTop: 2 },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border },
   checkCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
