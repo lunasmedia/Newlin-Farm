@@ -48,6 +48,10 @@ const FALLBACK_HERO = {
 // have, so paging feels identical to the old fixed hero at rest.
 const HERO_GAP = spacing.md;
 const HERO_WIDTH = Dimensions.get('window').width - spacing.lg * 2;
+// Distance the carousel scrolls per page — same value used for
+// snapToInterval below and for mapping the live scroll position to each
+// dot's place in the indicator.
+const HERO_PAGE_WIDTH = HERO_WIDTH + HERO_GAP;
 
 // How much scroll distance the collapse/expand plays out over. Tuned to
 // roughly the combined natural height of the nav row + address row.
@@ -136,7 +140,12 @@ export default function Home() {
   // admin most recently added.
   const homePromotions = useMemo(() => promotions.filter((promo) => !promo.categoryId), [promotions]);
   const heroList = homePromotions.length > 0 ? homePromotions : [FALLBACK_HERO];
-  const [activeHeroIndex, setActiveHeroIndex] = useState(0);
+  // Drives the dot indicator directly off the carousel's live scroll
+  // position (native-driven, so it tracks the finger every frame) instead
+  // of a page index only set once momentum scrolling ends — see heroDots
+  // below, where each dot interpolates its own size/colour straight off
+  // this value rather than snapping between two fixed states.
+  const heroScrollX = useRef(new Animated.Value(0)).current;
   const storeSettings = normalizeStoreSettings(settings);
   const deliverValue = defaultAddress ? defaultAddress.line2 || defaultAddress.line1 : 'Add an address';
   // Extra breathing room below the safe area (status bar / Dynamic Island),
@@ -223,18 +232,23 @@ export default function Home() {
             </View>
           ) : null}
           <View style={styles.heroSection}>
-            <ScrollView
+            <Animated.ScrollView
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               decelerationRate="fast"
-              snapToInterval={HERO_WIDTH + HERO_GAP}
+              snapToInterval={HERO_PAGE_WIDTH}
               snapToAlignment="start"
               contentContainerStyle={styles.heroRow}
-              onMomentumScrollEnd={(event) => {
-                const page = Math.round(event.nativeEvent.contentOffset.x / (HERO_WIDTH + HERO_GAP));
-                setActiveHeroIndex((current) => (current === page ? current : page));
-              }}>
+              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: heroScrollX } } }], {
+                // JS-driven, not native — the dots below animate `width`
+                // (a layout property) to keep the exact original pill shape
+                // as they grow/shrink, and layout properties can't run on
+                // the native driver. Still updates every scroll frame (see
+                // scrollEventThrottle), so it stays in sync with the drag.
+                useNativeDriver: false,
+              })}
+              scrollEventThrottle={16}>
               {heroList.map((promo, index) => {
                 const isFirst = index === 0;
                 const imageSource = isFirst
@@ -271,12 +285,36 @@ export default function Home() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+            </Animated.ScrollView>
             {heroList.length > 1 ? (
               <View style={styles.heroDots}>
-                {heroList.map((promo, index) => (
-                  <View key={promo.id} style={[styles.heroDot, index === activeHeroIndex && styles.heroDotActive]} />
-                ))}
+                {heroList.map((promo, index) => {
+                  // Each dot tracks the carousel's live scroll offset rather
+                  // than a single "active index" — as the offset moves
+                  // through this dot's page, it grows into the active pill
+                  // and turns green; moving on to the next page shrinks and
+                  // fades it back at the same time the next dot grows,
+                  // reading as one indicator morphing into the next rather
+                  // than two states snapping.
+                  const inputRange = [
+                    (index - 1) * HERO_PAGE_WIDTH,
+                    index * HERO_PAGE_WIDTH,
+                    (index + 1) * HERO_PAGE_WIDTH,
+                  ];
+                  const width = heroScrollX.interpolate({
+                    inputRange,
+                    outputRange: [6, 18, 6],
+                    extrapolate: 'clamp',
+                  });
+                  const backgroundColor = heroScrollX.interpolate({
+                    inputRange,
+                    outputRange: [colors.border, colors.forest, colors.border],
+                    extrapolate: 'clamp',
+                  });
+                  return (
+                    <Animated.View key={promo.id} style={[styles.heroDot, { width, backgroundColor }]} />
+                  );
+                })}
               </View>
             ) : null}
           </View>
@@ -521,7 +559,6 @@ const styles = StyleSheet.create({
   },
   heroDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: spacing.sm },
   heroDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
-  heroDotActive: { width: 18, backgroundColor: colors.forest },
   heroText: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
   heroTag: {
     backgroundColor: colors.forest,

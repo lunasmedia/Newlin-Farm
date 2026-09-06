@@ -1,27 +1,60 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconCircle } from '@/components/ui/IconCircle';
 import { ProductCard } from '@/components/ui/ProductCard';
+import { recordSearch } from '@/lib/newlin-api';
 import { colors, radii, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/fonts';
+import { useAuth } from '@/state/auth-context';
 import { useCatalog } from '@/state/catalog-context';
 
-const POPULAR = ['Strawberries', 'Sourdough', 'Milk', 'Offers', 'Dinner tonight'];
+// How long to wait after the last keystroke before this counts as a real
+// search worth recording — avoids logging "s", "st", "str", ... as the
+// customer types, while still catching a search they never technically
+// "submit" (there's no separate submit step in this UI).
+const RECORD_SEARCH_DEBOUNCE_MS = 700;
+const MIN_RECORDED_QUERY_LENGTH = 2;
 
 export default function Search() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { products, categories } = useCatalog();
+  const { products, categories, popularSearches } = useCatalog();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < MIN_RECORDED_QUERY_LENGTH) return;
+    const timeout = setTimeout(() => {
+      // Signed-in searches are attributed (via a fresh ID token) so the
+      // admin can tell whether this search later led to a purchase — see
+      // recordSearch. A token fetch failure still records the search, just
+      // anonymously, same as being signed out.
+      if (user) {
+        user
+          .getIdToken()
+          .then((idToken) => recordSearch(trimmed, idToken))
+          .catch(() => recordSearch(trimmed));
+      } else {
+        recordSearch(trimmed);
+      }
+    }, RECORD_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [query, user]);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        (p.longDescription?.toLowerCase().includes(q) ?? false) ||
+        (p.badge?.toLowerCase().includes(q) ?? false)
     );
   }, [query, products]);
 
@@ -38,6 +71,9 @@ export default function Search() {
             placeholderTextColor={colors.mutedLight}
             style={styles.input}
             autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
           />
           {query.length > 0 ? (
             <Pressable onPress={() => setQuery('')}>
@@ -50,15 +86,19 @@ export default function Search() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl }}>
         {query.trim().length === 0 ? (
           <>
-            <Text style={styles.sectionLabel}>POPULAR SEARCHES</Text>
-            <View style={styles.popularWrap}>
-              {POPULAR.map((term) => (
-                <Pressable key={term} style={styles.popularChip} onPress={() => setQuery(term)}>
-                  <Ionicons name="arrow-up-outline" size={13} color={colors.ink} style={{ transform: [{ rotate: '45deg' }] }} />
-                  <Text style={styles.popularText}>{term}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {popularSearches.length > 0 ? (
+              <>
+                <Text style={styles.sectionLabel}>POPULAR SEARCHES</Text>
+                <View style={styles.popularWrap}>
+                  {popularSearches.map((term) => (
+                    <Pressable key={term} style={styles.popularChip} onPress={() => setQuery(term)}>
+                      <Ionicons name="arrow-up-outline" size={13} color={colors.ink} style={{ transform: [{ rotate: '45deg' }] }} />
+                      <Text style={styles.popularText}>{term}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
 
             <Text style={styles.browseTitle}>Browse categories</Text>
             <View style={styles.categoryList}>
@@ -84,13 +124,21 @@ export default function Search() {
                 <Text style={styles.sortText}>Filter ⇅</Text>
               </Pressable>
             </View>
-            <View style={styles.grid}>
-              {results.map((p) => (
-                <View key={p.id} style={styles.gridItem}>
-                  <ProductCard product={p} />
-                </View>
-              ))}
-            </View>
+            {results.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={{ fontSize: 32 }}>🔍</Text>
+                <Text style={styles.emptyTitle}>No matches for &quot;{query.trim()}&quot;</Text>
+                <Text style={styles.emptySubtitle}>Try a different word, or browse a category below.</Text>
+              </View>
+            ) : (
+              <View style={styles.grid}>
+                {results.map((p) => (
+                  <View key={p.id} style={styles.gridItem}>
+                    <ProductCard product={p} />
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -151,5 +199,8 @@ const styles = StyleSheet.create({
   sortBtn: { backgroundColor: colors.inputBg, borderRadius: radii.pill, paddingVertical: 8, paddingHorizontal: spacing.sm },
   sortText: { fontSize: 13, fontWeight: '700', color: colors.ink },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg, gap: spacing.xs },
+  emptyTitle: { fontFamily: fonts.serifBold, fontSize: 18, color: colors.ink, textAlign: 'center' },
+  emptySubtitle: { fontSize: 13, color: colors.muted, textAlign: 'center' },
   gridItem: { width: '47%' },
 });

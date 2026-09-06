@@ -9,6 +9,7 @@ export interface CatalogResponse {
     products: ApiProduct[];
     promotions: ApiPromotion[];
     deliverySlots: ApiDeliverySlot[];
+    popularSearches: string[];
     settings: {
       [k: string]: unknown;
     };

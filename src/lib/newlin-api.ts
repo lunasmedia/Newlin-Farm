@@ -91,6 +91,10 @@ export type PlaceOrderPayload = {
   itemsPence: number;
   deliveryFeePence: number;
   deliveryAddress: string;
+  // Basket line items — powers the admin's Analytics → Best sellers tab.
+  // Optional on the admin side (an order still places fine without it), but
+  // always sent from here so real sales actually build up that data.
+  items: { productId: string; name: string; quantity: number; unitPricePence: number }[];
 };
 
 export type PlaceOrderResult = { id: string; status: string };
@@ -182,4 +186,26 @@ export async function syncCustomerProfile(idToken: string): Promise<SyncCustomer
 
   const data = (await response.json()) as { active?: boolean };
   return { active: data.active ?? true };
+}
+
+// Fire-and-forget: called by search.tsx (debounced, not per-keystroke) so
+// the admin's popularSearches — see fetchCatalog's response — fills in from
+// real customer behaviour instead of a hardcoded list. Never throws; a
+// failed analytics ping must never surface to the customer or block typing.
+// `idToken` is optional and only passed when the customer is signed in —
+// see search.tsx — so the admin can attribute this search to them for
+// search → purchase conversion tracking; a signed-out search still records
+// (anonymously) exactly as before.
+export function recordSearch(query: string, idToken?: string): void {
+  if (!API_URL) return;
+  fetch(`${API_URL}/api/v1/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+    },
+    body: JSON.stringify({ query }),
+  }).catch(() => {
+    // Best-effort analytics — nothing to recover from here.
+  });
 }

@@ -71,6 +71,12 @@ export default function CheckoutReview() {
         itemsPence: Math.round(subtotal * 100),
         deliveryFeePence,
         deliveryAddress: `${defaultAddress.line1}, ${defaultAddress.line2}`,
+        items: products.map((product) => ({
+          productId: product.id,
+          name: product.name,
+          quantity: product.qty,
+          unitPricePence: Math.round(product.price * 100),
+        })),
       });
       clear();
       // Fire-and-forget — the orders list refetches in the background so

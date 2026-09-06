@@ -59,6 +59,7 @@ type CatalogContextValue = {
   categories: Category[];
   promotions: ApiPromotion[];
   deliverySlots: ApiDeliverySlot[];
+  popularSearches: string[];
   settings: Record<string, unknown>;
   loading: boolean;
   error: string | null;
@@ -76,6 +77,11 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
   const [rawCategories, setRawCategories] = useState<Category[]>(localCategories);
   const [promotions, setPromotions] = useState<ApiPromotion[]>([]);
   const [deliverySlots, setDeliverySlots] = useState<ApiDeliverySlot[]>(localDeliverySlots);
+  // No bundled fallback here (unlike products/categories/deliverySlots) —
+  // this is admin-curated from real customer behaviour, so there's nothing
+  // sensible to hardcode; search.tsx just hides the section until this has
+  // real entries.
+  const [popularSearches, setPopularSearches] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, unknown>>({});
   // True only until the first request settles (success or failure) — this
   // is "do we have nothing but the bundled fallback yet", not "is a
@@ -100,6 +106,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
       setRawCategories(res.data.categories.map(toCategory));
       setPromotions(res.data.promotions.filter((promo) => promo.active));
       setDeliverySlots(res.data.deliverySlots);
+      setPopularSearches(res.data.popularSearches);
       setSettings(res.data.settings);
       setError(null);
     } catch (e) {
@@ -134,6 +141,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
           setRawCategories(res.data.categories.map(toCategory));
           setPromotions(res.data.promotions.filter((promo) => promo.active));
           setDeliverySlots(res.data.deliverySlots);
+          setPopularSearches(res.data.popularSearches);
           setSettings(res.data.settings);
           setError(null);
         }
@@ -183,6 +191,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
     categories,
     promotions,
     deliverySlots,
+    popularSearches,
     settings,
     loading,
     error,
